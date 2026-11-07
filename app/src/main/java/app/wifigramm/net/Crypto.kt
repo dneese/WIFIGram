@@ -32,8 +32,10 @@ object Crypto {
     /** Derives the key of the room from its code and its password. */
     fun deriveRoomKey(code: String, password: String): ByteArray {
         val salt = sha256("wifigramm-room-v1:" + code.trim().lowercase())
+        // Some phones refuse an empty password, the code is the secret then
+        val secret = password.ifEmpty { code.trim().lowercase() }
         val spec = PBEKeySpec(
-            password.toCharArray(),
+            secret.toCharArray(),
             salt,
             120_000,
             256

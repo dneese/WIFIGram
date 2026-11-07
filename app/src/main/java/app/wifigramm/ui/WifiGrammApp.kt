@@ -210,6 +210,7 @@ private fun SetupScreen(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Пароль кімнати") },
+                placeholder = { Text("обов'язково, 4 символи або більше") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -255,7 +256,7 @@ private fun SetupScreen(
                         host
                     )
                 },
-                enabled = code.isNotBlank() && nickname.isNotBlank(),
+                enabled = code.isNotBlank() && nickname.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Увійти до кімнати")
@@ -670,6 +671,10 @@ private fun statusText(status: String): String = when (status) {
     "idle" -> ""
     "stopped" -> "Кімната зупинена"
     "server-failed" -> "Не вдалося відкрити порт для зв'язку"
+    "start-failed" -> "Не вдалося запустити кімнату"
+    "wifi-direct-group-ready" -> "Група WiFi Direct готова"
+    "wifi-direct-connecting" -> "Підключення до групи WiFi Direct..."
+    "wifi-direct-channel-lost" -> "Зв'язок WiFi Direct втрачено"
     "wifi-direct-group" -> "Створення групи WiFi Direct..."
     "wifi-direct-search" -> "Пошук кімнати WiFi Direct..."
     "wifi-direct-failed" -> "WiFi Direct не вдався"

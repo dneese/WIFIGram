@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.3
+
+- The password of the room is required now: some phones do not allow an empty password and the app closed with the error `password empty`.
+- The app does not close anymore when the password is empty: the code of the room is used as the secret instead.
+
 ## v0.1.2
 
 - The setup of the WiFi Direct group is guarded, a phone that refuses the group no longer closes the app.
