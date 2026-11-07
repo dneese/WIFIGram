@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WIFIGramm</string>
-    <color name="ic_launcher_background">#1F6FEB</color>
+    <string name="app_name">WIFIGram</string>
+    <string name="service_channel">Станція</string>
+    <string name="call_channel">Дзвінки</string>
+    <string name="service_waiting">Очікує телефони в мережі</string>
+    <string name="service_peers">Телефонів у мережі: %1$d</string>
+    <string name="call_incoming">Вхідний дзвінок</string>
+    <string name="call_answer">Відповісти</string>
+    <string name="call_reject">Відхилити</string>
+    <color name="ic_launcher_background">#1A73E8</color>
 </resources>

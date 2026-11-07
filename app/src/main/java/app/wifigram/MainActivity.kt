@@ -1,4 +1,4 @@
-package app.wifigramm
+package app.wifigram
 
 import android.Manifest
 import android.os.Build
@@ -9,8 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import app.wifigramm.ui.WifiGrammApp
-import app.wifigramm.ui.WifiGrammTheme
+import app.wifigram.ui.WifigramApp
+import app.wifigram.ui.WifigramTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -28,13 +28,14 @@ class MainActivity : ComponentActivity() {
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             wanted.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            wanted.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         permissionLauncher.launch(wanted.toTypedArray())
 
         setContent {
-            WifiGrammTheme {
+            WifigramTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    WifiGrammApp()
+                    WifigramApp()
                 }
             }
         }

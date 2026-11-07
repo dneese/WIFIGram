@@ -12,11 +12,11 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "app.wifigramm"
+    namespace = "app.wifigram"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "app.wifigramm"
+        applicationId = "app.wifigram"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 4

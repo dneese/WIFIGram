@@ -1,4 +1,4 @@
-package app.wifigramm.net
+package app.wifigram.net
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -37,7 +37,7 @@ class DirectBridge(
 ) {
 
     private companion object {
-        const val NETWORK_NAME = "WIFIGRAMM"
+        const val NETWORK_NAME = "WIFIGRAM"
     }
 
     private val manager: WifiP2pManager? =

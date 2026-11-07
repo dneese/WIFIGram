@@ -1,4 +1,4 @@
-package app.wifigramm
+package app.wifigram
 
 import android.content.Context
 import java.io.File
