@@ -129,6 +129,10 @@ class Intercom(
     private val _missed = MutableStateFlow(0)
     val missed: StateFlow<Int> = _missed.asStateFlow()
 
+    /** What the phone tells about the connection, for example the direct one. */
+    private val _status = MutableStateFlow("")
+    val status: StateFlow<String> = _status.asStateFlow()
+
     private val links = ConcurrentHashMap<String, PeerLink>()
     private val connecting = ConcurrentHashMap<String, Boolean>()
     private val known = ConcurrentHashMap<String, Peer>()
@@ -215,7 +219,7 @@ class Intercom(
             onOwnerAddress = { address ->
                 scope.launch(Dispatchers.IO) { connectToAddress(address, Protocol.TCP_PORT) }
             },
-            onStatus = { }
+            onStatus = { value -> _status.value = statusText(value) }
         )
         directBridge = bridge
         if (hostMode) bridge.startOwner() else bridge.startClient()
@@ -277,6 +281,18 @@ class Intercom(
             } catch (_: Exception) {
             }
         }
+    }
+
+    /** The words of the state of the connection. */
+    private fun statusText(value: String): String = when (value) {
+        "wifi-direct-group" -> "Створення групи WiFi Direct..."
+        "wifi-direct-group-ready" -> "Група WiFi Direct готова"
+        "wifi-direct-search" -> "Пошук групи WiFi Direct..."
+        "wifi-direct-connecting" -> "Підключення до групи..."
+        "wifi-direct-failed" -> "WiFi Direct не вдався"
+        "wifi-direct-unavailable" -> "WiFi Direct недоступний"
+        "wifi-direct-channel-lost" -> "Зв'язок WiFi Direct втрачено"
+        else -> ""
     }
 
     /** A phone has said that it is here. */

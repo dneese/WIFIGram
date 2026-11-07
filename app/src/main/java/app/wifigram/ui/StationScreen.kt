@@ -47,6 +47,7 @@ fun StationScreen(
     onChat: (String) -> Unit
 ) {
     val peers by engine.peers.collectAsStateWithLifecycle()
+    val status by engine.status.collectAsStateWithLifecycle()
 
     if (peers.isEmpty()) {
         Box(
@@ -82,6 +83,16 @@ fun StationScreen(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
+        if (status.isNotBlank()) {
+            item {
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 20.dp, top = 8.dp)
+                )
+            }
+        }
         item {
             Text(
                 text = "Станція: ${peers.count { it.online }} телефонів у мережі",
