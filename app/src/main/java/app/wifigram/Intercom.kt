@@ -798,7 +798,7 @@ class Intercom(
 
     private fun startVoice() {
         if (voice != null) return
-        val session = CallSession(scope) { frame ->
+        val session = CallSession(context, scope) { frame ->
             val call = _call.value ?: return@CallSession
             // The list of the phones of the conversation, the sender is in it
             val members = call.participants.map { it.id } + peerId

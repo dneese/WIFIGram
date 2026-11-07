@@ -215,9 +215,8 @@ class CallSession(
                 } else {
                     android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
                 }
-                manager.setCommunicationDevice(
-                    manager.availableCommunicationDevices.firstOrNull { it.type == device }
-                )
+                val found = manager.availableCommunicationDevices.firstOrNull { it.type == device }
+                if (found != null) manager.setCommunicationDevice(found)
             } catch (_: Exception) {
             }
         }

@@ -282,7 +282,7 @@ object Protocol {
                 offset += length
             }
             val stream = DataInputStream(payload.inputStream())
-            stream.skipBytes(offset.toLong())
+            stream.skipBytes(offset)
             val sequence = stream.readInt()
             Audio(callId, members, sequence, payload.copyOfRange(offset + 4, payload.size), flags == AUDIO_DIRECT)
         } catch (_: Exception) {
