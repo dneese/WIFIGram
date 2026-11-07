@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -28,6 +35,23 @@ android {
         }
     }
 
+    val hasReleaseSigning = localProps.containsKey("KEYSTORE_PATH") &&
+        localProps.containsKey("KEYSTORE_PASSWORD") &&
+        localProps.containsKey("KEY_ALIAS") &&
+        localProps.containsKey("KEY_PASSWORD")
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(localProps["KEYSTORE_PATH"] as String)
+                storePassword = localProps["KEYSTORE_PASSWORD"] as String
+                keyAlias = localProps["KEY_ALIAS"] as String
+                keyPassword = localProps["KEY_PASSWORD"] as String
+                storeType = localProps["KEYSTORE_TYPE"] as? String ?: "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -35,6 +59,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
