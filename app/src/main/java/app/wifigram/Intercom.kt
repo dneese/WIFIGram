@@ -44,7 +44,8 @@ class Intercom(
         val id: String,
         val name: String,
         val status: String,
-        val online: Boolean
+        val online: Boolean,
+        val lastSeen: Long = System.currentTimeMillis()
     )
 
     data class ChatMessage(
@@ -93,6 +94,9 @@ class Intercom(
 
         /** How long a call waits for the phone that went out of reach. */
         const val SIGNAL_TIMEOUT = 5 * 60 * 1000L
+
+        /** How long a phone may be quiet before it leaves the station. */
+        const val PEER_TTL = 30_000L
     }
 
     private val peerId: String = run {
@@ -289,7 +293,8 @@ class Intercom(
             id = remoteId,
             name = remoteName.ifBlank { existing?.name ?: "Телефон" },
             status = status,
-            online = true
+            online = true,
+            lastSeen = System.currentTimeMillis()
         )
         refreshPeers()
 
@@ -326,7 +331,8 @@ class Intercom(
                         id = remoteId,
                         name = event.name.ifBlank { old?.name ?: "Телефон" },
                         status = old?.status ?: STATUS_FREE,
-                        online = true
+                        online = true,
+                        lastSeen = System.currentTimeMillis()
                     )
                     refreshPeers()
                     // A call that was interrupted by the lost WiFi continues
@@ -408,7 +414,7 @@ class Intercom(
                         lastPlayed[link.remotePeerId] = audio.sequence
                         voice?.play(audio.data)
                     }
-                } else if (call != null && audio.callId == call.callId) {
+                } else if (call != null && audio.callId == call.callId && audio.hops > 1) {
                     // This phone is only a relay, the sound goes further
                     links.values.forEach { other ->
                         if (other !== link) {
@@ -419,7 +425,8 @@ class Intercom(
                                     audio.members,
                                     audio.sequence,
                                     audio.data,
-                                    false
+                                    false,
+                                    audio.hops - 1
                                 )
                             )
                         }
@@ -629,7 +636,7 @@ class Intercom(
                     Protocol.CALL_ADD,
                     call.callId,
                     localName,
-                    call.participants.joinToString(",") { it.name }
+                    participants.joinToString(",") { it.id }
                 )
             )
         )
@@ -713,14 +720,18 @@ class Intercom(
                 // The phone was added to the conversation of the other one
                 val call = _call.value
                 if (call == null || call.phase == Phase.WAITING) {
+                    val members = signal.extra.split(",").filter { it.isNotBlank() }
+                    val participants = members.map { id ->
+                        Participant(id, known[id]?.name ?: "Телефон", true)
+                    }.ifEmpty {
+                        listOf(Participant(remoteId, signal.name.ifBlank { "Телефон" }, true))
+                    }
                     _call.value = Call(
                         callId = signal.callId,
                         phase = Phase.ACTIVE,
                         peerId = remoteId,
                         peerName = signal.name.ifBlank { known[remoteId]?.name ?: "Телефон" },
-                        participants = listOf(
-                            Participant(remoteId, signal.name.ifBlank { "Телефон" }, true)
-                        ),
+                        participants = participants,
                         startedAt = System.currentTimeMillis()
                     )
                     callStartedAt = System.currentTimeMillis()
@@ -786,13 +797,16 @@ class Intercom(
 
     private fun endCallLocally(rememberMissed: Boolean) {
         val call = _call.value
+        val outgoing = call?.phase == Phase.DIALING || call?.phase == Phase.WAITING
         stopVoice()
         _call.value = null
         _waiting.value = emptyList()
         signalLostAt = 0L
         if (rememberMissed && call != null) {
-            CallLogStore.add(context, call.peerName, false)
+            CallLogStore.add(context, call.peerName, outgoing, missed = true)
             _missed.value = _missed.value + 1
+        } else if (call != null && call.phase == Phase.ACTIVE) {
+            CallLogStore.add(context, call.peerName, outgoing, missed = false)
         }
     }
 
@@ -825,6 +839,12 @@ class Intercom(
     init {
         scope.launch(Dispatchers.Default) {
             while (true) {
+                delay(5000)
+                cleanOldPeers()
+            }
+        }
+        scope.launch(Dispatchers.Default) {
+            while (true) {
                 delay(1000)
                 val call = _call.value ?: continue
                 if (call.phase != Phase.ACTIVE || !call.signalLost) continue
@@ -834,6 +854,25 @@ class Intercom(
                 }
             }
         }
+    }
+
+    /** A phone that has not said anything for a long time leaves the station. */
+    private fun cleanOldPeers() {
+        val call = _call.value
+        val now = System.currentTimeMillis()
+        var changed = false
+        known.entries.toList().forEach { (id, peer) ->
+            if (links.containsKey(id)) {
+                // The connection is alive, the phone stays in the station
+                known[id] = peer.copy(lastSeen = now)
+                return@forEach
+            }
+            if (now - peer.lastSeen < PEER_TTL) return@forEach
+            if (call != null && call.participants.any { it.id == id }) return@forEach
+            known.remove(id)
+            changed = true
+        }
+        if (changed) refreshPeers()
     }
 
     private fun refreshPeers() {

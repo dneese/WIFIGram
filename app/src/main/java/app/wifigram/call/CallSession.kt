@@ -126,6 +126,7 @@ class CallSession(
         track = audioTrack
         running = true
         applyRoute()
+        applyMode()
 
         try {
             audioTrack.play()
@@ -150,6 +151,11 @@ class CallSession(
         try { track?.stop() } catch (_: Exception) { }
         try { track?.release() } catch (_: Exception) { }
         track = null
+        try {
+            val manager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            manager?.mode = AudioManager.MODE_NORMAL
+        } catch (_: Exception) {
+        }
     }
 
     /** Plays the sound that came from the other phone. */
@@ -199,6 +205,12 @@ class CallSession(
             result[index] = value.toInt().toByte()
         }
         return result
+    }
+
+    /** The phone talks as in a usual call while the conversation goes on. */
+    private fun applyMode() {
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        try { manager.mode = AudioManager.MODE_IN_COMMUNICATION } catch (_: Exception) { }
     }
 
     /** Chooses the speaker of the phone or the earpiece. */

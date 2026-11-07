@@ -81,6 +81,28 @@ fun WifigramApp() {
         peers.firstOrNull { it.id == id }?.name ?: "Телефон"
     } ?: "Телефон"
 
+    var pendingCall by remember { mutableStateOf<String?>(null) }
+    val micPermission = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val target = pendingCall
+        pendingCall = null
+        if (granted && target != null) engine.startCall(target)
+    }
+
+    val startCall: (String) -> Unit = { id ->
+        val allowed = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (allowed) {
+            engine.startCall(id)
+        } else {
+            pendingCall = id
+            micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -183,7 +205,7 @@ fun WifigramApp() {
 
                     1 -> StationScreen(
                         engine = engine,
-                        onCall = { id -> engine.startCall(id) },
+                        onCall = { id -> startCall(id) },
                         onChat = { id ->
                             chatPeer = id
                             tab = 2

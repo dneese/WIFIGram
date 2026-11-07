@@ -232,12 +232,14 @@ object Protocol {
         members: List<String>,
         sequence: Int,
         data: ByteArray,
-        direct: Boolean
+        direct: Boolean,
+        hops: Int = 3
     ): ByteArray {
         val id = bytes(callId)
         val out = java.io.ByteArrayOutputStream()
         val stream = DataOutputStream(out)
         stream.writeByte(if (direct) AUDIO_DIRECT else AUDIO_RELAY)
+        stream.writeByte(hops)
         stream.writeByte(id.size)
         stream.write(id)
         stream.writeByte(members.size)
@@ -257,14 +259,16 @@ object Protocol {
         val members: List<String>,
         val sequence: Int,
         val data: ByteArray,
-        val direct: Boolean
+        val direct: Boolean,
+        val hops: Int
     )
 
     fun decodeAudio(payload: ByteArray): Audio? {
         return try {
             if (payload.size < 6) return null
             val flags = payload[0].toInt() and 0xFF
-            var offset = 1
+            val hops = payload[1].toInt() and 0xFF
+            var offset = 2
             val idLength = payload[offset].toInt() and 0xFF
             offset++
             if (idLength <= 0 || payload.size < offset + idLength + 1) return null
@@ -284,7 +288,14 @@ object Protocol {
             val stream = DataInputStream(payload.inputStream())
             stream.skipBytes(offset)
             val sequence = stream.readInt()
-            Audio(callId, members, sequence, payload.copyOfRange(offset + 4, payload.size), flags == AUDIO_DIRECT)
+            Audio(
+                callId,
+                members,
+                sequence,
+                payload.copyOfRange(offset + 4, payload.size),
+                flags == AUDIO_DIRECT,
+                hops
+            )
         } catch (_: Exception) {
             null
         }
