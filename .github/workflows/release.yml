@@ -1,0 +1,117 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for Gradlew
+        run: chmod +x ./gradlew
+
+      - name: Set up release signing
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "No signing key configured, building unsigned APKs"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/keystore"
+          echo "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
+          {
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/keystore/release.jks"
+            echo "KEYSTORE_PASSWORD=$KEY_STORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+            echo "KEYSTORE_TYPE=PKCS12"
+            echo "sdk.dir=$ANDROID_HOME"
+          } > local.properties
+          echo "Keystore configured"
+
+      - name: Build Release APKs (with architecture splits)
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: List APK files
+        run: |
+          echo "APK files built:"
+          find app/build/outputs/apk/release -name "*.apk" -type f -exec ls -lh {} \;
+
+      - name: Rename APKs for GitHub Release
+        run: |
+          cd app/build/outputs/apk/release
+          for f in *.apk; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              *arm64-v8a*) target="wifigramm-arm64.apk" ;;
+              *x86_64*) target="wifigramm-x86_64.apk" ;;
+              *universal*) target="wifigramm-universal.apk" ;;
+              *) target="wifigramm-$f" ;;
+            esac
+            [ "$f" = "$target" ] || mv "$f" "$target"
+          done
+
+      - name: Prepare release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          if [ -f CHANGELOG.md ]; then
+            awk -v tag="$TAG" '
+              $0 ~ "^## " tag "$" { found=1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > "$NOTES_FILE"
+          fi
+          if [ ! -s "$NOTES_FILE" ]; then
+            git log --no-merges --pretty=format:'- %s' -5 > "$NOTES_FILE"
+          fi
+          {
+            echo "### What changed"
+            echo
+            cat "$NOTES_FILE"
+            echo
+            echo "### Downloads"
+            echo
+            echo "- **wifigramm-arm64.apk** — ARM64 (most phones)"
+            echo "- **wifigramm-x86_64.apk** — x86_64 (emulators)"
+            echo "- **wifigramm-universal.apk** — all architectures"
+          } > "$RUNNER_TEMP/release-body.md"
+          echo "notes prepared"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/build/outputs/apk/release/wifigramm-arm64.apk
+            app/build/outputs/apk/release/wifigramm-x86_64.apk
+            app/build/outputs/apk/release/wifigramm-universal.apk
+          name: Release ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-body.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
