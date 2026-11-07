@@ -22,6 +22,7 @@ import java.net.InetAddress
  * encrypted with the key of the call and sent over UDP. The other phone
  * decrypts it and plays it right away.
  */
+@android.annotation.SuppressLint("MissingPermission")
 class VoiceCall(
     private val callKey: ByteArray,
     destination: InetAddress?,
