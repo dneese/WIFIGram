@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1
+
+- The app does not close anymore when the network gives a strange answer: every error is caught and the reason is shown inside the app.
+- The text of the last error can be sent to the author from the phone.
+- The key of the room is made in the background, so the screen does not freeze when the phone enters the room.
+
 ## v0.1.0
 
 - The first version of WIFIGramm: chat, files and voice calls inside one local network or directly between two phones over WiFi Direct.
