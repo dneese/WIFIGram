@@ -136,6 +136,9 @@ class RoomEngine(
                 onReady = { isOwner ->
                     scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = isOwner) }
                 },
+                onOwnerAddress = { address ->
+                    scope.launch(Dispatchers.IO) { connectToAddress(address, Protocol.TCP_PORT) }
+                },
                 onStatus = { value -> _status.value = value }
             )
             directBridge = bridge
@@ -194,6 +197,20 @@ class RoomEngine(
             }
             val link = PeerLink(socket, roomKey, peerId, nickname, scope, ::handleEvent)
             link.start(initiator = false)
+        }
+    }
+
+    /** Connects to a phone whose address is already known. */
+    private fun connectToAddress(host: String, port: Int) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val socket = Socket()
+                socket.connect(InetSocketAddress(host, port), 3000)
+                socket.tcpNoDelay = true
+                val link = PeerLink(socket, roomKey, peerId, nickname, scope, ::handleEvent)
+                link.start(initiator = true)
+            } catch (_: Exception) {
+            }
         }
     }
 
