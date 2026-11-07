@@ -219,6 +219,6 @@ class VoiceCall(
             ((data[1].toInt() and 0xFF) shl 16) or
             ((data[2].toInt() and 0xFF) shl 8) or
             (data[3].toInt() and 0xFF)
-        return value and 0xFFFFFFFF
+        return value
     }
 }

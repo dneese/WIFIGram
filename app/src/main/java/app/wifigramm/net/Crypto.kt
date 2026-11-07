@@ -70,6 +70,8 @@ object Crypto {
     fun sha256(data: ByteArray): ByteArray =
         MessageDigest.getInstance("SHA-256").digest(data)
 
+    fun sha256(text: String): ByteArray = sha256(text.toByteArray(Charsets.UTF_8))
+
     /** Encrypts with ChaCha20-Poly1305, the nonce has to be 12 bytes. */
     fun encrypt(
         key: ByteArray,

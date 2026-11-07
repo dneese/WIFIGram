@@ -135,20 +135,46 @@ class Discovery(
     }
 
     /** The address of the phone in the network, the other phones need it. */
-    private fun localAddress(): String = try {
-        val interfaces = NetworkInterface.getNetworkInterfaces()
-        while (interfaces != null && interfaces.hasMoreElements()) {
-            val network = interfaces.nextElement()
-            if (!network.isUp || network.isLoopback) continue
-            for (address in network.inetAddresses) {
-                if (address is java.net.Inet4Address && !address.isLoopbackAddress) {
-                    return address.hostAddress ?: ""
+    private fun localAddress(): String {
+        return try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                val network = interfaces.nextElement()
+                if (!network.isUp || network.isLoopback) continue
+                for (address in network.inetAddresses) {
+                    if (address is java.net.Inet4Address && !address.isLoopbackAddress) {
+                        return address.hostAddress ?: ""
+                    }
                 }
             }
+            ""
+        } catch (_: Exception) {
+            ""
         }
-        ""
-    } catch (_: Exception) {
-        ""
+    }
+
+    /** The broadcast address of one network, counted from its netmask. */
+    private fun broadcastAddress(network: NetworkInterface): InetAddress? {
+        return try {
+            val addresses = network.interfaceAddresses ?: return null
+            for (info in addresses) {
+                val address = info.address
+                if (address is java.net.Inet4Address) {
+                    val bytes = address.address
+                    val prefix = info.networkPrefixLength
+                    val result = ByteArray(4)
+                    for (index in 0..3) {
+                        val hostBits = (prefix - index * 8).coerceIn(0, 8)
+                        val hostMask = (0xFF shl (8 - hostBits)) and 0xFF
+                        result[index] = (bytes[index].toInt() or (hostMask.inv() and 0xFF)).toByte()
+                    }
+                    return InetAddress.getByAddress(result)
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** The broadcast address of every network of the phone. */
@@ -162,9 +188,8 @@ class Discovery(
             while (interfaces != null && interfaces.hasMoreElements()) {
                 val network = interfaces.nextElement()
                 if (!network.isUp || network.isLoopback) continue
-                for (address in network.broadcast ?: emptyArray()) {
-                    if (!result.contains(address)) result.add(address)
-                }
+                val broadcast = broadcastAddress(network)
+                if (broadcast != null && !result.contains(broadcast)) result.add(broadcast)
             }
         } catch (_: Exception) { }
         return result

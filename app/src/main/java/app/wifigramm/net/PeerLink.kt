@@ -82,7 +82,7 @@ class PeerLink(
                 handshake(initiator)
                 readLoop()
             } catch (_: Exception) {
-                onEvent(this, Event.Closed)
+                onEvent(this@PeerLink, Event.Closed)
             }
         }
     }
@@ -118,7 +118,7 @@ class PeerLink(
         remotePeerId = remote.peerId
         remoteNickname = remote.nickname
         val safety = Crypto.toHex(Crypto.sha256(sessionKey).copyOf(3))
-        onEvent(this, Event.Handshake(remote.peerId, remote.nickname, safety))
+        onEvent(this@PeerLink, Event.Handshake(remote.peerId, remote.nickname, safety))
     }
 
     private fun readLoop() {
@@ -127,24 +127,24 @@ class PeerLink(
             when (frame.type) {
                 Protocol.TYPE_MESSAGE -> {
                     val message = Protocol.decodeMessage(frame.payload)
-                    if (message != null) onEvent(this, Event.Message(message))
+                    if (message != null) onEvent(this@PeerLink, Event.Message(message, frame.payload))
                 }
                 Protocol.TYPE_FILE_META -> {
                     val meta = Protocol.decodeFileMeta(frame.payload)
-                    if (meta != null) onEvent(this, Event.FileMeta(meta))
+                    if (meta != null) onEvent(this@PeerLink, Event.FileMeta(meta, frame.payload))
                 }
                 Protocol.TYPE_FILE_CHUNK -> {
                     val chunk = Protocol.decodeFileChunk(frame.payload)
-                    if (chunk != null) onEvent(this, Event.FileChunk(chunk))
+                    if (chunk != null) onEvent(this@PeerLink, Event.FileChunk(chunk, frame.payload))
                 }
                 Protocol.TYPE_CALL -> {
                     val signal = Protocol.decodeCallSignal(frame.payload)
-                    if (signal != null) onEvent(this, Event.Call(signal))
+                    if (signal != null) onEvent(this@PeerLink, Event.Call(signal, frame.payload))
                 }
                 Protocol.TYPE_BYE -> break
             }
         }
-        onEvent(this, Event.Closed)
+        onEvent(this@PeerLink, Event.Closed)
     }
 
     /** Sends one frame of the session. */
@@ -152,7 +152,7 @@ class PeerLink(
         try {
             Protocol.writeFrame(output, sessionKey, type, payload)
         } catch (_: Exception) {
-            onEvent(this, Event.Closed)
+            onEvent(this@PeerLink, Event.Closed)
         }
     }
 
@@ -173,6 +173,8 @@ class PeerLink(
                 }
                 val meta = Protocol.FileMeta(
                     transferId = transferId,
+                    from = localPeerId,
+                    nickname = localNickname,
                     name = file.name,
                     size = size,
                     mime = mime,
@@ -198,7 +200,7 @@ class PeerLink(
                     }
                 }
             } catch (_: Exception) {
-                onEvent(this, Event.Closed)
+                onEvent(this@PeerLink, Event.Closed)
             }
         }
     }

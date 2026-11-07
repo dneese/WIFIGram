@@ -96,7 +96,7 @@ class RoomEngine(
     val transferProgress: StateFlow<Map<String, Int>> = _transferProgress.asStateFlow()
 
     private val links = ConcurrentHashMap<String, PeerLink>()
-    private val connecting = Collections.newSetFromMap(ConcurrentHashMap())
+    private val connecting = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val seenMessages = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val incomingFiles = ConcurrentHashMap<Long, IncomingFile>()
 
