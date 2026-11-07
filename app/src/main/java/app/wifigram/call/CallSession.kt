@@ -25,6 +25,7 @@ import kotlin.math.sin
  * While the connection is lost the phone says so with a quiet beep, the
  * same way the old phones did.
  */
+@android.annotation.SuppressLint("MissingPermission")
 class CallSession(
     private val context: Context,
     private val scope: CoroutineScope,
