@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.2
+
+- The setup of the WiFi Direct group is guarded, a phone that refuses the group no longer closes the app.
+
 ## v0.1.1
 
 - The app does not close anymore when the network gives a strange answer: every error is caught and the reason is shown inside the app.

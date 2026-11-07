@@ -117,10 +117,10 @@ class DirectBridge(
             return
         }
         onStatus("wifi-direct-group")
-        val config = WifiP2pConfig.Builder()
-            .setNetworkName(NETWORK_NAME)
-            .build()
         try {
+            val config = WifiP2pConfig.Builder()
+                .setNetworkName(NETWORK_NAME)
+                .build()
             p2p.createGroup(wifiChannel, config, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     scope.launch(Dispatchers.Main) {
@@ -170,13 +170,13 @@ class DirectBridge(
         val p2p = manager ?: return
         val wifiChannel = channel ?: return
         connecting = true
-        val builder = WifiP2pConfig.Builder().setNetworkName(NETWORK_NAME)
         try {
-            builder.setDeviceAddress(android.net.MacAddress.fromString(device.deviceAddress))
-        } catch (_: Exception) {
-        }
-        val config = builder.build()
-        try {
+            val builder = WifiP2pConfig.Builder().setNetworkName(NETWORK_NAME)
+            try {
+                builder.setDeviceAddress(android.net.MacAddress.fromString(device.deviceAddress))
+            } catch (_: Exception) {
+            }
+            val config = builder.build()
             p2p.connect(wifiChannel, config, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     scope.launch(Dispatchers.Main) {
