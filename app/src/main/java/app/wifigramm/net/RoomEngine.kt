@@ -65,7 +65,9 @@ class RoomEngine(
         val startedAt: Long
     )
 
-    private val roomKey: ByteArray = Crypto.deriveRoomKey(code, password)
+    // The key is derived when the room starts, so a slow phone does not
+    // freeze the screen and a failure can be caught.
+    private val roomKey: ByteArray by lazy { Crypto.deriveRoomKey(code, password) }
 
     private val peerId: String = run {
         val prefs = context.getSharedPreferences("wifigramm_identity", Context.MODE_PRIVATE)
@@ -121,6 +123,12 @@ class RoomEngine(
 
         scope.launch(Dispatchers.IO) {
             try {
+                roomKey
+            } catch (_: Exception) {
+                _status.value = "start-failed"
+                return@launch
+            }
+            try {
                 val server = ServerSocket(Protocol.TCP_PORT)
                 serverSocket = server
                 acceptJob = scope.launch(Dispatchers.IO) { acceptLoop(server) }
@@ -129,22 +137,26 @@ class RoomEngine(
             }
         }
 
-        if (direct) {
-            val bridge = DirectBridge(
-                context = context,
-                scope = scope,
-                onReady = { isOwner ->
-                    scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = isOwner) }
-                },
-                onOwnerAddress = { address ->
-                    scope.launch(Dispatchers.IO) { connectToAddress(address, Protocol.TCP_PORT) }
-                },
-                onStatus = { value -> _status.value = value }
-            )
-            directBridge = bridge
-            if (host) bridge.startOwner() else bridge.startClient()
-        } else {
-            scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = true) }
+        try {
+            if (direct) {
+                val bridge = DirectBridge(
+                    context = context,
+                    scope = scope,
+                    onReady = { isOwner ->
+                        scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = isOwner) }
+                    },
+                    onOwnerAddress = { address ->
+                        scope.launch(Dispatchers.IO) { connectToAddress(address, Protocol.TCP_PORT) }
+                    },
+                    onStatus = { value -> _status.value = value }
+                )
+                directBridge = bridge
+                if (host) bridge.startOwner() else bridge.startClient()
+            } else {
+                scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = true) }
+            }
+        } catch (_: Exception) {
+            _status.value = "start-failed"
         }
     }
 

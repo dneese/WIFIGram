@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,7 +52,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,12 +63,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.wifigramm.CrashLog
 import app.wifigramm.RoomStore
 import app.wifigramm.net.Crypto
 import app.wifigramm.net.Protocol
 import app.wifigramm.net.RoomEngine
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectAsState
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -81,6 +88,7 @@ import java.util.Locale
 fun WifiGrammApp() {
     val context = LocalContext.current
     var room by remember { mutableStateOf(RoomStore.load(context)) }
+    var crashText by remember { mutableStateOf(CrashLog.read(context)) }
 
     val saved = room
     if (saved == null) {
@@ -100,6 +108,46 @@ fun WifiGrammApp() {
                 room = null
             }
         )
+    }
+
+    crashText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { crashText = null },
+            title = { Text("Помилка додатка") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text(text = text, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    crashText = null
+                    CrashLog.clear(context)
+                }) {
+                    Text("Зрозуміло")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { shareCrash(context, text) }) {
+                    Text("Поділитися")
+                }
+            }
+        )
+    }
+}
+
+/** Sends the text of the error to another app, so it can be sent to the author. */
+private fun shareCrash(context: android.content.Context, text: String) {
+    try {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "WIFIGramm: помилка")
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        context.startActivity(Intent.createChooser(intent, "Надіслати помилку"))
+    } catch (_: Exception) {
     }
 }
 
@@ -233,7 +281,23 @@ private fun ChatScreen(
     onLeave: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val crashState = remember { MutableStateFlow<String?>(null) }
+    val crashText by crashState.collectAsState()
+
+    // Every error of the background work is written down, the app does not
+    // close because of a packet from the network.
+    val scope = remember {
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, error ->
+                CrashLog.save(context, error)
+                crashState.value = CrashLog.read(context)
+            }
+        )
+    }
+    DisposableEffect(scope) {
+        onDispose { scope.cancel() }
+    }
+
     val engine = remember(room, host) {
         RoomEngine(
             context = context,
@@ -542,6 +606,33 @@ private fun ChatScreen(
                     engine.declineCall(signal)
                 }) {
                     Text("Відхилити")
+                }
+            }
+        )
+    }
+
+    crashText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { crashState.value = null },
+            title = { Text("Помилка додатка") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text(text = text, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    crashState.value = null
+                    CrashLog.clear(context)
+                }) {
+                    Text("Зрозуміло")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { shareCrash(context, text) }) {
+                    Text("Поділитися")
                 }
             }
         )

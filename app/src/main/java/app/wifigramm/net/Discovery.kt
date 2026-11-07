@@ -114,23 +114,27 @@ class Discovery(
     private suspend fun receiveLoop(datagramSocket: DatagramSocket) {
         val buffer = ByteArray(2048)
         while (scope.isActive) {
-            val packet = DatagramPacket(buffer, buffer.size)
             try {
-                datagramSocket.receive(packet)
+                val packet = DatagramPacket(buffer, buffer.size)
+                try {
+                    datagramSocket.receive(packet)
+                } catch (_: Exception) {
+                    continue
+                }
+                val frame = packet.data.copyOf(packet.length)
+                if (frame.size < 14 || frame[0].toInt() != Protocol.TYPE_BEACON) continue
+                val nonce = frame.copyOfRange(1, 13)
+                val cipher = frame.copyOfRange(13, frame.size)
+                val payload = Crypto.decrypt(roomKey, nonce, cipher, byteArrayOf(Protocol.TYPE_BEACON.toByte()))
+                if (payload == null) continue
+                val beacon = Protocol.decodeBeacon(payload) ?: continue
+                if (beacon.peerId == peerId) continue
+                val age = System.currentTimeMillis() - beacon.timestamp
+                if (age < -60000 || age > 60000) continue
+                onPeerFound(beacon.peerId, beacon.nickname, packet.address, beacon.port)
             } catch (_: Exception) {
-                continue
+                // A strange packet must not stop the search
             }
-            val frame = packet.data.copyOf(packet.length)
-            if (frame.size < 14 || frame[0].toInt() != Protocol.TYPE_BEACON) continue
-            val nonce = frame.copyOfRange(1, 13)
-            val cipher = frame.copyOfRange(13, frame.size)
-            val payload = Crypto.decrypt(roomKey, nonce, cipher, byteArrayOf(Protocol.TYPE_BEACON.toByte()))
-            if (payload == null) continue
-            val beacon = Protocol.decodeBeacon(payload) ?: continue
-            if (beacon.peerId == peerId) continue
-            val age = System.currentTimeMillis() - beacon.timestamp
-            if (age < -60000 || age > 60000) continue
-            onPeerFound(beacon.peerId, beacon.nickname, packet.address, beacon.port)
         }
     }
 
