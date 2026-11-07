@@ -68,10 +68,10 @@ jobs:
           for f in *.apk; do
             [ -e "$f" ] || continue
             case "$f" in
-              *arm64-v8a*) target="wifigramm-arm64.apk" ;;
-              *x86_64*) target="wifigramm-x86_64.apk" ;;
-              *universal*) target="wifigramm-universal.apk" ;;
-              *) target="wifigramm-$f" ;;
+              *arm64-v8a*) target="wifigram-arm64.apk" ;;
+              *x86_64*) target="wifigram-x86_64.apk" ;;
+              *universal*) target="wifigram-universal.apk" ;;
+              *) target="wifigram-$f" ;;
             esac
             [ "$f" = "$target" ] || mv "$f" "$target"
           done
@@ -98,9 +98,9 @@ jobs:
             echo
             echo "### Downloads"
             echo
-            echo "- **wifigramm-arm64.apk** — ARM64 (most phones)"
-            echo "- **wifigramm-x86_64.apk** — x86_64 (emulators)"
-            echo "- **wifigramm-universal.apk** — all architectures"
+            echo "- **wifigram-arm64.apk** — ARM64 (most phones)"
+            echo "- **wifigram-x86_64.apk** — x86_64 (emulators)"
+            echo "- **wifigram-universal.apk** — all architectures"
           } > "$RUNNER_TEMP/release-body.md"
           echo "notes prepared"
 
@@ -108,9 +108,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app/build/outputs/apk/release/wifigramm-arm64.apk
-            app/build/outputs/apk/release/wifigramm-x86_64.apk
-            app/build/outputs/apk/release/wifigramm-universal.apk
+            app/build/outputs/apk/release/wifigram-arm64.apk
+            app/build/outputs/apk/release/wifigram-x86_64.apk
+            app/build/outputs/apk/release/wifigram-universal.apk
           name: Release ${{ github.ref_name }}
           body_path: ${{ runner.temp }}/release-body.md
         env:
