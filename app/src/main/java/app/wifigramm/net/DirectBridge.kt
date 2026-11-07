@@ -171,11 +171,9 @@ class DirectBridge(
         val wifiChannel = channel ?: return
         connecting = true
         val builder = WifiP2pConfig.Builder().setNetworkName(NETWORK_NAME)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            try {
-                builder.setDeviceAddress(android.net.MacAddress.fromString(device.deviceAddress))
-            } catch (_: Exception) {
-            }
+        try {
+            builder.setDeviceAddress(android.net.MacAddress.fromString(device.deviceAddress))
+        } catch (_: Exception) {
         }
         val config = builder.build()
         try {

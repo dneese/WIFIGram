@@ -49,7 +49,7 @@ WIFIGramm залишає зручну ідею — телефони знаход
 
 APK: `app/build/outputs/apk/release/app-release.apk`.
 
-Мінімальна версія Android — 9 (API 28), потрібні `ChaCha20-Poly1305` та
+Мінімальна версія Android — 10 (API 29), потрібні `ChaCha20-Poly1305` та
 `PBKDF2WithHmacSHA256`.
 
 ## Ліцензія
