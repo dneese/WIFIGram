@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
  * Only the public API of the platform is used: the listeners that Android
  * hides are replaced by a receiver of the WiFi Direct broadcasts.
  */
+@android.annotation.SuppressLint("MissingPermission")
 class DirectBridge(
     private val context: Context,
     private val scope: CoroutineScope,
