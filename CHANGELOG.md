@@ -1,24 +1,16 @@
 # Changelog
 
-## v0.1.3
+## v0.2.0
 
-- The password of the room is required now: some phones do not allow an empty password and the app closed with the error `password empty`.
-- The app does not close anymore when the password is empty: the code of the room is used as the secret instead.
+The app is now an intercom, not a messenger with rooms.
 
-## v0.1.2
-
-- The setup of the WiFi Direct group is guarded, a phone that refuses the group no longer closes the app.
-
-## v0.1.1
-
-- The app does not close anymore when the network gives a strange answer: every error is caught and the reason is shown inside the app.
-- The text of the last error can be sent to the author from the phone.
-- The key of the room is made in the background, so the screen does not freeze when the phone enters the room.
-
-## v0.1.0
-
-- The first version of WIFIGram: chat, files and voice calls inside one local network or directly between two phones over WiFi Direct.
-- Everything is encrypted with ChaCha20-Poly1305, the key comes from the code and the password of the room (PBKDF2-HMAC-SHA256).
-- Only a phone that knows the password of the room can join it, the phones greet each other with an HMAC and show a safety code for the check.
-- Files are sent in pieces of 64 KB and checked with SHA-256 on the other phone.
-- The voice goes over UDP, every piece of sound is encrypted with the key of the call.
+- No rooms, no codes and no passwords. Every phone that runs WIFIGram in the same network appears in the station with its name and its state.
+- The calls work like in a phone app: the ringtone of the system, the name of the caller, the buttons to answer and to reject.
+- The mute of the microphone and the switch between the speaker and the earpiece during the conversation.
+- The line that is busy does not turn the caller away: the caller waits on the line and the phone that talks can add the waiting one to the conversation. So three phones can talk at once.
+- The connection is stable: a ping every three seconds notices a lost WiFi in a few seconds, the call is not closed when the phones go out of reach, the phone beeps quietly until the signal is back and the conversation continues by itself.
+- The chat and the files work with one phone at a time, like the messages and the pictures of a usual phone.
+- The journal of the calls with the missed ones.
+- The station lives in a background service, so a call is heard even when the screen is closed.
+- The look of a usual phone app: three tabs, the green call button, the round dial screen.
+- The name of the app is WIFIGram.

@@ -1,57 +1,55 @@
 # WIFIGram
 
-Легкий додаток для чату, файлів і телефонії **в одній мережі** або напряму
-через **WiFi Direct** — без акаунтів, без серверів і без інтернету.
+An intercom for the local network. Every phone that runs WIFIGram in the same
+WiFi network sees the others, calls them, talks to them and sends messages or
+files.
 
-Натхненням став розбір WiFi Talkie (`com.remaller.android.wifitalkie_lite`).
-WIFIGram залишає зручну ідею — телефони знаходять один одного самі, — але
-закриває його недоліки.
+No accounts, no rooms, no codes, no passwords and no internet: the phones find
+each other by themselves.
 
-## Що вміє
+## What it does
 
-| | WIFIGram | WiFi Talkie |
-|---|---|---|
-| Шифрування всього трафіку | так, ChaCha20-Poly1305 | ні |
-| Ключ із коду та пароля кімнати | PBKDF2-HMAC-SHA256, 120 000 ітерацій | — |
-| Перевірка, що в кімнаті саме свій | HMAC-привітання + код безпеки | — |
-| Чат | так | так |
-| Файли | так, з перевіркою SHA-256 | так, без перевірки |
-| Телефонія | так, звук по UDP з шифруванням | так, RTP/Opus без шифрування |
-| WiFi Direct | так | ні (лише локальна мережа) |
+- **The station** — the list of the phones in the network with their names and
+  their state: free, busy or in a conversation.
+- **The calls** — a real phone call: the system ringtone, the name of the
+  caller, the buttons to answer and to reject, the mute of the microphone and
+  the switch between the speaker and the earpiece.
+- **The busy line** — if the phone is already talking, the caller waits on the
+  line. The phone that talks can add the waiting one to the conversation, and
+  then three phones talk at once.
+- **The stable connection** — when the phones go out of reach, the call is not
+  closed: the phone beeps quietly, waits and continues by itself when the
+  signal is back.
+- **The messages and the files** — one phone at a time, like the messages and
+  the pictures of a usual phone.
+- **The journal of the calls** — who called, who did not answer.
+- **WiFi Direct** — two phones talk directly, without a router. It is the mode
+  for the car: no mobile network and no internet are needed.
 
-Що саме полагено у Talkie:
+## How it works
 
-* трафік передавався відкритим текстом — тут кожен кадр зашифрований;
-* будь-який, хто чув мережеві широкомовні пакети, міг під’єднатися до кімнати —
-  тут потрібне знання пароля, а код безпеки показує, що підміни немає;
-* під’єднання було лише через роутер — тут є і WiFi Direct;
-* файли не перевірялися — тут SHA-256 обчислюється до і після передачі;
-* дзвінки йшли без шифрування — тут кожен шматок звуку зашифрований ключем дзвінка.
+- The phones say "I am here" to the broadcast address of the network and to a
+  multicast group every two seconds.
+- Every phone opens a connection to the others, and the chat, the files, the
+  signals of the calls and the voice go through it.
+- The voice is captured in pieces of 20 milliseconds and sent to the phones of
+  the conversation. A phone that is only a way to the others passes the sound
+  further.
+- A ping every three seconds notices a dead WiFi in a few seconds.
 
-## Як це працює
+## The build
 
-1. Телефон надсилає зашифровані маяки (beacon) у мережу раз на 3 секунди.
-2. Телефон, який почув маяк і знає пароль, відповідаєHMAC-привітанням і
-   встановлює TCP-з’єднання.
-3. Обидві сторони виводять сесійний ключ (HKDF) і показують **код безпеки** —
-   як у Signal: якщо коди збігаються, посередника немає.
-4. Повідомлення, файли й сигнали дзвінків ідуть у зашифрованому вигляді;
-   файли — частинами по 64 КБ із перевіркою хешу.
+The project is built on GitHub Actions. The release workflow builds the
+signed APKs for arm64, x86_64 and for every architecture at once:
 
-Для WiFi Direct одна з телефонів створює групу, решта приєднується, далі все
-відбувається так само.
-
-## Збірка
-
-```bash
-./gradlew assembleRelease
+```
+bash scripts/release.sh v0.2.0
 ```
 
-APK: `app/build/outputs/apk/release/app-release.apk`.
+The tag starts the workflow, it builds the APKs and publishes them on the
+releases page of the repository.
 
-Мінімальна версія Android — 10 (API 29), потрібні `ChaCha20-Poly1305` та
-`PBKDF2WithHmacSHA256`.
+## The name
 
-## Ліцензія
-
-MIT.
+WIFIGram is an intercom for the local network: the phones of one building,
+one car park or one van talk to each other without the mobile network.
