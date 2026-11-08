@@ -143,7 +143,7 @@ fun SettingsDialog(
     val context = LocalContext.current
     val version = remember {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
         } catch (_: Exception) {
             ""
         }
