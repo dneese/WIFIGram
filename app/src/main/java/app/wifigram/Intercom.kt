@@ -3,6 +3,8 @@ package app.wifigram
 import android.content.Context
 import android.net.Uri
 import app.wifigram.call.CallSession
+import app.wifigram.call.OpusCodec
+import app.wifigram.net.AudioLink
 import app.wifigram.net.DirectBridge
 import app.wifigram.net.Discovery
 import app.wifigram.net.PeerLink
@@ -134,6 +136,8 @@ class Intercom(
     val status: StateFlow<String> = _status.asStateFlow()
 
     private val links = ConcurrentHashMap<String, PeerLink>()
+    private val audioLinks = ConcurrentHashMap<String, AudioLink>()
+    private val audioMaintenance = ConcurrentHashMap.newKeySet<String>()
     private val connecting = ConcurrentHashMap<String, Boolean>()
     private val known = ConcurrentHashMap<String, Peer>()
     private val seenMessages = ConcurrentHashMap<String, Boolean>()
@@ -148,6 +152,8 @@ class Intercom(
 
     private var serverSocket: ServerSocket? = null
     private var acceptJob: Job? = null
+    private var audioServerSocket: ServerSocket? = null
+    private var audioAcceptJob: Job? = null
     private var discovery: Discovery? = null
     private var directBridge: DirectBridge? = null
     private var voice: CallSession? = null
@@ -171,6 +177,17 @@ class Intercom(
             }
         }
 
+        // The voice has its own door, so a file that travels never stands
+        // in the way of a word.
+        scope.launch(Dispatchers.IO) {
+            try {
+                val server = ServerSocket(Protocol.TCP_AUDIO_PORT)
+                audioServerSocket = server
+                audioAcceptJob = scope.launch(Dispatchers.IO) { acceptAudioLoop(server) }
+            } catch (_: Exception) {
+            }
+        }
+
         scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = true) }
 
         if (directMode) startDirect()
@@ -186,6 +203,15 @@ class Intercom(
         serverSocket = null
         acceptJob?.cancel()
         acceptJob = null
+        try { audioServerSocket?.close() } catch (_: Exception) { }
+        audioServerSocket = null
+        audioAcceptJob?.cancel()
+        audioAcceptJob = null
+        audioLinks.values.forEach { link ->
+            try { link.close() } catch (_: Exception) { }
+        }
+        audioLinks.clear()
+        audioMaintenance.clear()
         links.values.forEach { link ->
             try { link.close() } catch (_: Exception) { }
         }
@@ -264,6 +290,23 @@ class Intercom(
                     handleEvent(source, event)
                 }
                 link.start(initiator = false)
+            }
+        }
+    }
+
+    private fun acceptAudioLoop(server: ServerSocket) {
+        while (running) {
+            val socket: Socket = try {
+                server.accept()
+            } catch (_: Exception) {
+                break
+            }
+            try { socket.tcpNoDelay = true } catch (_: Exception) { }
+            scope.launch(Dispatchers.IO) {
+                val link = AudioLink(socket, peerId, localName, "", scope) { source, event ->
+                    handleAudioEvent(source, event)
+                }
+                link.start(initiates = false)
             }
         }
     }
@@ -354,6 +397,8 @@ class Intercom(
                     // A call that was interrupted by the lost WiFi continues
                     // when the phones see each other again.
                     resumeCallIfNeeded(remoteId)
+                    // The voice gets its own connection to this phone.
+                    ensureAudioLink(remoteId)
                 }
             }
 
@@ -421,33 +466,9 @@ class Intercom(
             }
 
             is PeerLink.Event.Audio -> {
-                val audio = event.audio
-                val call = _call.value
-                if (call != null && audio.callId == call.callId && audio.members.contains(peerId)) {
-                    // The sound is for this phone
-                    val last = lastPlayed[link.remotePeerId]
-                    if (last != audio.sequence) {
-                        lastPlayed[link.remotePeerId] = audio.sequence
-                        voice?.play(audio.data)
-                    }
-                } else if (call != null && audio.callId == call.callId && audio.hops > 1) {
-                    // This phone is only a relay, the sound goes further
-                    links.values.forEach { other ->
-                        if (other !== link) {
-                            other.send(
-                                Protocol.TYPE_AUDIO,
-                                Protocol.encodeAudio(
-                                    audio.callId,
-                                    audio.members,
-                                    audio.sequence,
-                                    audio.data,
-                                    false,
-                                    audio.hops - 1
-                                )
-                            )
-                        }
-                    }
-                }
+                // A phone whose voice connection is not up yet sends the
+                // sound on the usual connection.
+                handleAudioFrame(link.remotePeerId, event.audio)
             }
 
             is PeerLink.Event.Closed -> {
@@ -463,6 +484,116 @@ class Intercom(
                     markSignalLost(remoteId)
                 }
             }
+        }
+    }
+
+    // ── the voice connection ──
+
+    private fun handleAudioEvent(link: AudioLink, event: AudioLink.Event) {
+        when (event) {
+            is AudioLink.Event.Ready -> registerAudioLink(link)
+            is AudioLink.Event.Audio -> handleAudioFrame(link.remotePeerId, event.audio)
+            is AudioLink.Event.Closed -> {
+                val remoteId = link.remotePeerId
+                if (remoteId.isNotBlank()) audioLinks.remove(remoteId, link)
+            }
+        }
+    }
+
+    /**
+     * Keeps one voice connection per phone.
+     *
+     * Both phones could open one to the other at the same time, so the
+     * socket opened by the phone with the smaller id is the one that stays.
+     */
+    private fun registerAudioLink(link: AudioLink) {
+        val remoteId = link.remotePeerId
+        if (remoteId.isBlank() || remoteId == peerId) {
+            try { link.close() } catch (_: Exception) { }
+            return
+        }
+        val keep = if (link.initiator) peerId < remoteId else remoteId < peerId
+        if (!keep) {
+            try { link.close() } catch (_: Exception) { }
+            return
+        }
+        val old = audioLinks.put(remoteId, link)
+        if (old != null && old !== link) {
+            try { old.close() } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * The phone with the smaller id opens the voice connection and keeps
+     * opening it while the usual connection lives, so a voice socket that
+     * died with the WiFi comes back by itself.
+     */
+    private fun ensureAudioLink(remoteId: String) {
+        if (peerId >= remoteId) return
+        if (!audioMaintenance.add(remoteId)) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                while (running && links.containsKey(remoteId)) {
+                    if (!audioLinks.containsKey(remoteId)) {
+                        val address = links[remoteId]?.remoteAddress
+                        if (address != null) {
+                            try {
+                                val socket = Socket()
+                                socket.connect(InetSocketAddress(address, Protocol.TCP_AUDIO_PORT), 3000)
+                                socket.tcpNoDelay = true
+                                val link = AudioLink(
+                                    socket, peerId, localName, remoteId, scope
+                                ) { source, event ->
+                                    handleAudioEvent(source, event)
+                                }
+                                link.start(initiates = true)
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
+                    delay(2000)
+                }
+            } finally {
+                audioMaintenance.remove(remoteId)
+            }
+        }
+    }
+
+    /** One piece of the voice arrived, from the voice socket or the usual one. */
+    private fun handleAudioFrame(remoteId: String, audio: Protocol.Audio) {
+        val call = _call.value
+        if (call == null || audio.callId != call.callId) return
+        if (audio.members.contains(peerId)) {
+            // The sound is for this phone. A copy that comes the long way
+            // around carries the same sender and sequence and is thrown
+            // away here.
+            val last = lastPlayed[audio.senderId]
+            if (last == null || audio.sequence > last) {
+                lastPlayed[audio.senderId] = audio.sequence
+                voice?.play(audio.data, audio.opus)
+            }
+        } else if (audio.hops > 1) {
+            // This phone is only a relay, the sound goes further
+            relayAudio(audio, remoteId)
+        }
+    }
+
+    private fun relayAudio(audio: Protocol.Audio, fromRemoteId: String) {
+        links.values.forEach { other ->
+            if (other.remotePeerId == fromRemoteId) return@forEach
+            val payload = Protocol.encodeAudio(
+                callId = audio.callId,
+                senderId = audio.senderId,
+                members = audio.members,
+                sequence = audio.sequence,
+                data = audio.data,
+                direct = false,
+                opus = audio.opus,
+                hops = audio.hops - 1
+            )
+            val voiceLink = audioLinks[other.remotePeerId]
+            if (voiceLink != null) voiceLink.sendAudio(payload)
+            else other.send(Protocol.TYPE_AUDIO, payload)
         }
     }
 
@@ -828,17 +959,30 @@ class Intercom(
 
     private fun startVoice() {
         if (voice != null) return
+        // A new call: the words of the old one are not remembered.
+        lastPlayed.clear()
         val session = CallSession(context, scope) { frame ->
             val call = _call.value ?: return@CallSession
             // The list of the phones of the conversation, the sender is in it
             val members = call.participants.map { it.id } + peerId
             val sequence = audioSequence++
+            // The phone remembers its own last word, so a copy of it that
+            // comes back the long way around is thrown away.
+            lastPlayed[peerId] = sequence
             links.values.forEach { link ->
                 val direct = members.contains(link.remotePeerId)
-                link.send(
-                    Protocol.TYPE_AUDIO,
-                    Protocol.encodeAudio(call.callId, members, sequence, frame, direct)
+                val payload = Protocol.encodeAudio(
+                    callId = call.callId,
+                    senderId = peerId,
+                    members = members,
+                    sequence = sequence,
+                    data = frame,
+                    direct = direct,
+                    opus = OpusCodec.available
                 )
+                val voiceLink = audioLinks[link.remotePeerId]
+                if (voiceLink != null) voiceLink.sendAudio(payload)
+                else link.send(Protocol.TYPE_AUDIO, payload)
             }
         }
         voice = session

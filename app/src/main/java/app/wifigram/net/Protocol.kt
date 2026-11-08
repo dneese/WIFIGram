@@ -18,6 +18,9 @@ object Protocol {
     const val DISCOVERY_PORT = 45311
     const val TCP_PORT = 45312
 
+    /** The second connection that carries only the voice of a call. */
+    const val TCP_AUDIO_PORT = 45313
+
     const val TYPE_HELLO = 1
     const val TYPE_BYE = 2
     const val TYPE_MESSAGE = 3
@@ -220,26 +223,38 @@ object Protocol {
     const val AUDIO_DIRECT = 1
     const val AUDIO_RELAY = 2
 
+    /** The samples of the frame are Opus, not plain PCM. */
+    const val AUDIO_OPUS = 4
+
     /**
      * The piece of the voice.
      *
-     * [flags(1)][call id][members][sequence(4)][samples]. The members are the
-     * phones of the conversation, so a phone that is only a relay knows that
-     * the sound is not for it and passes it further.
+     * [flags(1)][hops(1)][sender id][call id][members][sequence(4)][samples].
+     * The sender id names the phone that spoke, so a copy that comes the
+     * long way around can be thrown away. The members are the phones of the
+     * conversation, so a phone that is only a relay knows that the sound is
+     * not for it and passes it further.
      */
     fun encodeAudio(
         callId: String,
+        senderId: String,
         members: List<String>,
         sequence: Int,
         data: ByteArray,
         direct: Boolean,
+        opus: Boolean,
         hops: Int = 3
     ): ByteArray {
         val id = bytes(callId)
+        val sender = bytes(senderId)
         val out = java.io.ByteArrayOutputStream()
         val stream = DataOutputStream(out)
-        stream.writeByte(if (direct) AUDIO_DIRECT else AUDIO_RELAY)
+        var flags = if (direct) AUDIO_DIRECT else AUDIO_RELAY
+        if (opus) flags = flags or AUDIO_OPUS
+        stream.writeByte(flags)
         stream.writeByte(hops)
+        stream.writeByte(sender.size)
+        stream.write(sender)
         stream.writeByte(id.size)
         stream.write(id)
         stream.writeByte(members.size)
@@ -256,10 +271,12 @@ object Protocol {
 
     data class Audio(
         val callId: String,
+        val senderId: String,
         val members: List<String>,
         val sequence: Int,
         val data: ByteArray,
         val direct: Boolean,
+        val opus: Boolean,
         val hops: Int
     )
 
@@ -269,32 +286,39 @@ object Protocol {
             val flags = payload[0].toInt() and 0xFF
             val hops = payload[1].toInt() and 0xFF
             var offset = 2
-            val idLength = payload[offset].toInt() and 0xFF
-            offset++
-            if (idLength <= 0 || payload.size < offset + idLength + 1) return null
-            val callId = String(payload, offset, idLength, Charsets.UTF_8)
-            offset += idLength
-            val memberCount = payload[offset].toInt() and 0xFF
-            offset++
-            val members = mutableListOf<String>()
-            repeat(memberCount) {
+            fun takeString(): String? {
                 if (payload.size <= offset) return null
                 val length = payload[offset].toInt() and 0xFF
                 offset++
                 if (length <= 0 || payload.size < offset + length) return null
-                members.add(String(payload, offset, length, Charsets.UTF_8))
+                val value = String(payload, offset, length, Charsets.UTF_8)
                 offset += length
+                return value
             }
-            val stream = DataInputStream(payload.inputStream())
-            stream.skipBytes(offset)
-            val sequence = stream.readInt()
+            val senderId = takeString() ?: return null
+            val callId = takeString() ?: return null
+            if (payload.size <= offset) return null
+            val memberCount = payload[offset].toInt() and 0xFF
+            offset++
+            val members = mutableListOf<String>()
+            repeat(memberCount) {
+                members.add(takeString() ?: return null)
+            }
+            if (payload.size < offset + 4) return null
+            val sequence = ((payload[offset].toInt() and 0xFF) shl 24) or
+                ((payload[offset + 1].toInt() and 0xFF) shl 16) or
+                ((payload[offset + 2].toInt() and 0xFF) shl 8) or
+                (payload[offset + 3].toInt() and 0xFF)
+            offset += 4
             Audio(
-                callId,
-                members,
-                sequence,
-                payload.copyOfRange(offset + 4, payload.size),
-                flags == AUDIO_DIRECT,
-                hops
+                callId = callId,
+                senderId = senderId,
+                members = members,
+                sequence = sequence,
+                data = payload.copyOfRange(offset, payload.size),
+                direct = (flags and AUDIO_DIRECT) != 0,
+                opus = (flags and AUDIO_OPUS) != 0,
+                hops = hops
             )
         } catch (_: Exception) {
             null

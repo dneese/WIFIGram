@@ -11,6 +11,11 @@ val localProps = Properties().apply {
     if (file.exists()) load(file.inputStream())
 }
 
+// The voice codec is native C, so it needs the NDK. A machine without the
+// NDK — a phone, for example — builds the rest with -PskipNative and the
+// voice quietly falls back to plain samples.
+val skipNative = project.hasProperty("skipNative")
+
 android {
     namespace = "app.wifigram"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -19,10 +24,27 @@ android {
         applicationId = "app.wifigram"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 5
-        versionName = "0.2.0"
+        versionCode = 6
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        if (!skipNative) {
+            externalNativeBuild {
+                cmake {
+                    arguments += listOf("-DANDROID_STL=none")
+                }
+            }
+        }
+    }
+
+    if (!skipNative) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
     }
 
     // The release is split by the architecture, so the APK is small

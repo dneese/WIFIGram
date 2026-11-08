@@ -18,9 +18,13 @@ import kotlin.math.sin
 /**
  * The voice of the conversation.
  *
- * The sound is captured in pieces of 20 milliseconds and handed to the
- * station, which sends them to the phones of the conversation. The other
- * side plays them right away.
+ * The sound is captured in pieces of 20 milliseconds, coded as Opus and
+ * handed to the station, which sends them to the phones of the
+ * conversation. The sound that comes back does not go to the speaker at
+ * once: it lands in a small cushion that smooths the bursts of the network
+ * — when the cushion grows, the sound runs a little faster until it is
+ * caught up, and when the network leaves a hole, the last sound fades
+ * instead of stopping.
  *
  * While the connection is lost the phone says so with a quiet beep, the
  * same way the old phones did.
@@ -37,17 +41,24 @@ class CallSession(
         const val FRAME_SAMPLES = 320      // 20 ms
         const val FRAME_BYTES = FRAME_SAMPLES * 2
 
+        /** The cushion of the device: four frames, eighty milliseconds. */
+        const val BUFFER_FRAMES = 4
+
         /** The quiet signal that says "there is no connection". */
         const val BEEP_INTERVAL = 4000L
         const val BEEP_TONE = 400.0
         const val BEEP_LENGTH = 80
+
+        /** One tick of the playout clock. */
+        const val TICK_NS = 20_000_000L
     }
 
     private var recorder: AudioRecord? = null
     private var track: AudioTrack? = null
     private var captureJob: Job? = null
-    private var beepJob: Job? = null
-    private var sequence = 0
+    private var playoutJob: Job? = null
+    private val playout = PlayoutBuffer()
+    private val silence = ByteArray(FRAME_BYTES)
 
     @Volatile
     private var muted = false
@@ -86,7 +97,7 @@ class CallSession(
             AudioFormat.ENCODING_PCM_16BIT
         )
         if (minBuffer <= 0) return false
-        val bufferSize = maxOf(minBuffer, FRAME_BYTES * 8)
+        val bufferSize = maxOf(minBuffer, FRAME_BYTES * BUFFER_FRAMES)
 
         val audioRecord = try {
             AudioRecord(
@@ -125,6 +136,7 @@ class CallSession(
         recorder = audioRecord
         track = audioTrack
         running = true
+        playout.reset()
         applyRoute()
         applyMode()
 
@@ -135,7 +147,7 @@ class CallSession(
         }
 
         captureJob = scope.launch(Dispatchers.IO) { captureLoop(audioRecord) }
-        beepJob = scope.launch(Dispatchers.IO) { beepLoop() }
+        playoutJob = scope.launch(Dispatchers.IO) { playoutLoop(audioTrack) }
         return true
     }
 
@@ -143,14 +155,16 @@ class CallSession(
         running = false
         captureJob?.cancel()
         captureJob = null
-        beepJob?.cancel()
-        beepJob = null
+        playoutJob?.cancel()
+        playoutJob = null
         try { recorder?.stop() } catch (_: Exception) { }
         try { recorder?.release() } catch (_: Exception) { }
         recorder = null
         try { track?.stop() } catch (_: Exception) { }
         try { track?.release() } catch (_: Exception) { }
         track = null
+        playout.reset()
+        try { OpusCodec.reset() } catch (_: Exception) { }
         try {
             val manager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             manager?.mode = AudioManager.MODE_NORMAL
@@ -159,11 +173,14 @@ class CallSession(
     }
 
     /** Plays the sound that came from the other phone. */
-    fun play(data: ByteArray) {
-        try {
-            track?.write(data, 0, data.size)
-        } catch (_: Exception) {
+    fun play(data: ByteArray, opus: Boolean) {
+        if (!running) return
+        val pcm = if (opus) {
+            OpusCodec.decode(data) ?: return
+        } else {
+            data
         }
+        playout.enqueue(pcm)
     }
 
     private fun captureLoop(audioRecord: AudioRecord) {
@@ -180,20 +197,66 @@ class CallSession(
                 continue
             }
             val frame = buffer.copyOf(read)
-            sequence++
-            onFrame(frame)
+            if (OpusCodec.available) {
+                val coded = OpusCodec.encode(frame) ?: continue
+                onFrame(coded)
+            } else {
+                onFrame(frame)
+            }
         }
     }
 
-    /** The quiet beep that says that the connection is gone. */
-    private suspend fun beepLoop() {
+    /**
+     * The clock of the speaker: one tick every twenty milliseconds.
+     *
+     * The tick asks the cushion what to do — the sound that waits, the
+     * sound that runs a little faster, the fade over a hole — and the quiet
+     * beep of the lost connection keeps its place here too.
+     */
+    private fun playoutLoop(audioTrack: AudioTrack) {
+        var next = System.nanoTime()
+        var lastBeep = 0L
         while (running && scope.isActive) {
-            kotlinx.coroutines.delay(BEEP_INTERVAL)
-            if (!running || !signalLost) continue
-            val tone = makeTone()
+            val action = playout.nextFrame()
+            val bytes = when (action) {
+                is PlayoutBuffer.Action.Play -> action.data
+                is PlayoutBuffer.Action.Conceal -> action.data
+                PlayoutBuffer.Action.Wait -> silence
+                PlayoutBuffer.Action.Silence -> silence
+            }
             try {
-                track?.write(tone, 0, tone.size)
+                audioTrack.write(bytes, 0, bytes.size)
             } catch (_: Exception) {
+            }
+
+            if (signalLost) {
+                val now = System.currentTimeMillis()
+                if (lastBeep == 0L) {
+                    lastBeep = now
+                } else if (now - lastBeep >= BEEP_INTERVAL) {
+                    lastBeep = now
+                    val tone = makeTone()
+                    try {
+                        audioTrack.write(tone, 0, tone.size)
+                    } catch (_: Exception) {
+                    }
+                }
+            } else {
+                lastBeep = 0L
+            }
+
+            next += TICK_NS
+            val sleep = next - System.nanoTime()
+            if (sleep > 0) {
+                try {
+                    kotlinx.coroutines.delay(sleep / 1_000_000, sleep % 1_000_000)
+                } catch (_: Exception) {
+                    break
+                }
+            } else {
+                // The phone was busy and the clock fell behind; the next
+                // tick starts from now instead of the old plan.
+                next = System.nanoTime()
             }
         }
     }

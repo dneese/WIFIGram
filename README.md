@@ -28,13 +28,17 @@ each other by themselves.
 
 ## How it works
 
-- The phones say "I am here" to the broadcast address of the network and to a
-  multicast group every two seconds.
-- Every phone opens a connection to the others, and the chat, the files, the
-  signals of the calls and the voice go through it.
-- The voice is captured in pieces of 20 milliseconds and sent to the phones of
-  the conversation. A phone that is only a way to the others passes the sound
-  further.
+- The phones say "I am here" to the broadcast address of the network and to
+  a multicast group every two seconds.
+- Every phone opens a connection to the others, and the chat, the files and
+  the signals of the calls go through it. The voice opens a second
+  connection of its own, so a picture that travels never stops a word.
+- The voice is captured in pieces of 20 milliseconds, coded with Opus and
+  sent to the phones of the conversation. On the other side it lands in a
+  small cushion that smooths the bursts of the network: a hole fades
+  instead of stopping, and when the cushion grows too thick the sound runs
+  a little faster until it is caught up. A phone that is only a way to the
+  others passes the sound further.
 - A ping every three seconds notices a dead WiFi in a few seconds.
 
 ## The build

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0
+
+The voice of the call runs faster and smoother.
+
+- **Its own connection**: the voice travels on a second socket, so a file or a long message never stops the talk. The voice connection comes back by itself when the WiFi returns.
+- **The cushion**: the sound that arrives lands in a small cushion before the speaker. The bursts of the network are smoothed, a hole in the network fades instead of stopping dead, and the phone feeds the speaker even while the sound is missing.
+- **The catch-up**: when the cushion grows too thick — after a quiet stretch of the network — the sound runs a little faster than life, a frame out of every few is dropped with a crossfade, until the cushion is small again and the normal speed is back. The talk is heard in full, only quicker, and never behind.
+- **Opus**: the voice is coded with Opus, so a piece of twenty milliseconds is a few dozen bytes instead of six hundred and forty — less load on the WiFi and the same voice.
+- **Smaller buffers**: the microphone and the speaker work with eighty milliseconds instead of one hundred and sixty, so the whole line is shorter by a breath.
+
+The voice frames changed their shape, so **every phone must update to this version**: an older phone hears nothing from this one.
+
 ## v0.2.0
 
 The app is now an intercom, not a messenger with rooms.
