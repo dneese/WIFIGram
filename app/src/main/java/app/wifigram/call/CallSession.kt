@@ -249,7 +249,9 @@ class CallSession(
             val sleep = next - System.nanoTime()
             if (sleep > 0) {
                 try {
-                    kotlinx.coroutines.delay(sleep / 1_000_000, sleep % 1_000_000)
+                    // The plan of the ticks is absolute, so a millisecond
+                    // that is rounded away here never piles up.
+                    kotlinx.coroutines.delay(sleep / 1_000_000)
                 } catch (_: Exception) {
                     break
                 }
