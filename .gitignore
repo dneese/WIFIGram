@@ -9,3 +9,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# The scratch of the Kotlin compiler
+.kotlin/
