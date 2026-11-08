@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.1
+
+The voice comes back whole: the words are not lost and not cut into pieces.
+
+- **The noise catcher of v0.4.0 is gone**: it swallowed the voice instead of the hum, so the phone speaks with its own voice again. The switch in the settings now turns the helper of the phone itself — the platform noise suppressor — and it can be turned off.
+- **The echo of the speaker** is taken away by the phone itself while the sound goes to the speaker, so the other phone hears you once, not twice.
+- **The microphone gives whole frames now**: the pieces of ten milliseconds were gathered into a frame of twenty, so no word fell out of the conversation.
+- **The cushion no longer throws words away**: when it grows too thick, the sound runs a little faster instead of dropping a frame out of every four. The voice is a little quicker for a moment — every word is still there.
+- **The sound of the phone does not mix itself up**: the voice, the ping and the chat of one connection no longer write over each other, which used to break the stream of the call.
+- **The route of the sound is set in the right order**, so the speaker stays the speaker and the voice comes out where it should.
+- **Smaller cushions**: the microphone and the speaker wait forty milliseconds instead of eighty, so the voice is that much closer.
+- **The journal of the calls shows the numbers**: how many frames were lost and how many holes of the network were hidden.
+
 ## v0.4.0
 
 The phone hears the voice clean, and says that a message has come.

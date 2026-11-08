@@ -52,7 +52,13 @@ object OpusCodec {
         val out = ByteArray(FRAME_BYTES)
         val samples = nativeDecode(decoder, data, out)
         if (samples <= 0) return null
-        return out.copyOf(samples * 2)
+        // After a loss the decoder may give less than a whole frame. The
+        // rest of the frame stays quiet, so the cushion keeps its rhythm
+        // and the sound does not jump.
+        if (samples * 2 < FRAME_BYTES) {
+            java.util.Arrays.fill(out, samples * 2, FRAME_BYTES, 0)
+        }
+        return out
     }
 
     /** The codec forgets the talk of the finished call. */

@@ -1,6 +1,8 @@
 package app.wifigram.ui
 
 import android.content.Intent
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import app.wifigram.call.Denoiser
 
 /** The name of the phone, the other phones see it in the station. */
 @Composable
@@ -141,6 +142,8 @@ fun SettingsDialog(
 ) {
     var isDenoise by remember { mutableStateOf(denoise) }
     val context = LocalContext.current
+    val noiseReady = remember { NoiseSuppressor.isAvailable() }
+    val echoReady = remember { AcousticEchoCanceler.isAvailable() }
     val version = remember {
         try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
@@ -165,7 +168,7 @@ fun SettingsDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (!Denoiser.available) {
+                        if (!noiseReady) {
                             Text(
                                 text = "На цьому телефоні недоступне",
                                 style = MaterialTheme.typography.bodySmall,
@@ -176,9 +179,20 @@ fun SettingsDialog(
                     Switch(
                         checked = isDenoise,
                         onCheckedChange = { isDenoise = it },
-                        enabled = Denoiser.available
+                        enabled = noiseReady
                     )
                 }
+
+                Text(
+                    text = if (echoReady) {
+                        "Ехо від динаміка прибирається саме, поки телефон у спікерфоні."
+                    } else {
+                        "Ехо від динаміка на цьому телефоні прибирати нечем."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 

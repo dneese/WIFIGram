@@ -7,7 +7,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.net.Socket
@@ -45,7 +44,7 @@ class PeerLink(
     }
 
     private val input = BufferedInputStream(socket.getInputStream())
-    private val output = BufferedOutputStream(socket.getOutputStream())
+    private val writer = FrameWriter(socket.getOutputStream())
     private var readJob: Job? = null
     private var pingJob: Job? = null
 
@@ -86,7 +85,7 @@ class PeerLink(
                     break
                 }
                 try {
-                    Protocol.writeFrame(output, Protocol.TYPE_PING, ByteArray(0))
+                    writer.write(Protocol.TYPE_PING, ByteArray(0))
                 } catch (_: Exception) {
                     break
                 }
@@ -97,7 +96,7 @@ class PeerLink(
     private fun handshake(initiator: Boolean) {
         val hello = Protocol.encodeHello(localPeerId, localName)
         if (initiator) {
-            Protocol.writeFrame(output, Protocol.TYPE_HELLO, hello)
+            writer.write(Protocol.TYPE_HELLO, hello)
             val frame = Protocol.readFrame(input) ?: throw IllegalStateException("no hello")
             if (frame.type != Protocol.TYPE_HELLO) throw IllegalStateException("wrong hello")
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
@@ -109,7 +108,7 @@ class PeerLink(
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
             remotePeerId = remote.peerId
             remoteName = remote.name
-            Protocol.writeFrame(output, Protocol.TYPE_HELLO, hello)
+            writer.write(Protocol.TYPE_HELLO, hello)
         }
         onEvent(this@PeerLink, Event.Hello(remotePeerId, remoteName))
     }
@@ -120,7 +119,7 @@ class PeerLink(
             lastWord = System.currentTimeMillis()
             when (frame.type) {
                 Protocol.TYPE_PING -> {
-                    try { Protocol.writeFrame(output, Protocol.TYPE_PONG, ByteArray(0)) } catch (_: Exception) { }
+                    try { writer.write(Protocol.TYPE_PONG, ByteArray(0)) } catch (_: Exception) { }
                 }
                 Protocol.TYPE_PONG -> Unit
                 Protocol.TYPE_MESSAGE -> {
@@ -152,7 +151,7 @@ class PeerLink(
     /** Sends one frame of the connection. */
     fun send(type: Int, payload: ByteArray) {
         try {
-            Protocol.writeFrame(output, type, payload)
+            writer.write(type, payload)
         } catch (_: Exception) {
             onEvent(this@PeerLink, Event.Closed)
         }
@@ -178,8 +177,7 @@ class PeerLink(
                     size = size,
                     mime = mime
                 )
-                Protocol.writeFrame(
-                    output,
+                writer.write(
                     Protocol.TYPE_FILE_META,
                     Protocol.encodeFileMeta(meta)
                 )
@@ -191,8 +189,7 @@ class PeerLink(
                         val read = input.read(buffer)
                         if (read <= 0) break
                         val piece = buffer.copyOf(read)
-                        Protocol.writeFrame(
-                            output,
+                        writer.write(
                             Protocol.TYPE_FILE_CHUNK,
                             Protocol.encodeFileChunk(transferId, index, piece)
                         )

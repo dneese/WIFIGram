@@ -17,9 +17,8 @@ class PlayoutBufferTest {
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Wait)
         buffer.enqueue(frame(1))
         buffer.enqueue(frame(2))
-        buffer.enqueue(frame(3))
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Wait)
-        buffer.enqueue(frame(4))
+        buffer.enqueue(frame(3))
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Play)
         assertTrue(buffer.startedPlayout)
     }
@@ -48,76 +47,61 @@ class PlayoutBufferTest {
     }
 
     @Test
-    fun `a deep cushion drops frames until it is small again`() {
-        // The cushion of twenty frames is four hundred milliseconds: well
-        // above every line of the catch-up.
-        let {
-            val buffer = PlayoutBuffer()
-            repeat(20) { buffer.enqueue(frame(it)) }
+    fun `a thick cushion makes the sound run faster and loses no word`() {
+        // Ten frames are two hundred milliseconds: above the line of the
+        // catch-up, so the sound has to run a little faster.
+        val buffer = PlayoutBuffer()
+        repeat(10) { buffer.enqueue(frame(it + 1)) }
 
-            var ticks = 0
-            while (buffer.depthMs > PlayoutBuffer.CATCH_UP_UNTIL_MS && ticks < 200) {
-                buffer.nextFrame()
-                ticks++
+        val heard = mutableSetOf<Int>()
+        repeat(12) {
+            val action = play(buffer)
+            if (action is PlayoutBuffer.Action.Play) {
+                action.data.forEach { byte -> heard.add(byte.toInt() and 0xFF) }
             }
+        }
 
-            assertTrue("the catch-up must drop frames", buffer.droppedFrames > 0)
-            assertTrue(
-                "the cushion must be small again",
-                buffer.depthMs <= PlayoutBuffer.CATCH_UP_UNTIL_MS
-            )
-
-            // The last tick began above the lower line, so a few more
-            // ticks are needed before the speed is the normal one.
-            repeat(6) { buffer.nextFrame() }
-
-            // Normal speed: the drops stop while the cushion stays low.
-            val stopped = buffer.droppedFrames
-            repeat(10) {
-                buffer.enqueue(frame(it))
-                buffer.nextFrame()
-            }
-            assertEquals(stopped, buffer.droppedFrames)
+        assertEquals("no frame may be thrown away", 0, buffer.droppedFrames)
+        for (seed in 1..10) {
+            assertTrue("the frame $seed must be heard", heard.contains(seed))
         }
     }
 
     @Test
-    fun `drops exactly every second frame when asked to hurry`() {
+    fun `the sound runs faster only while the cushion is thick`() {
         val buffer = PlayoutBuffer(
             prebufferFrames = 1,
             catchUpOverMs = 40,
             catchUpHardOverMs = 100_000,
-            catchUpUntilMs = 20,
-            dropEvery = 2,
-            dropEveryHard = 2
+            catchUpUntilMs = 20
         )
         buffer.enqueue(frame(1))
         buffer.enqueue(frame(2))
         buffer.enqueue(frame(3))
 
         // The cushion of sixty milliseconds is above the line of forty.
-        val first = play(buffer)   // no drop yet: the counter is one
+        play(buffer)
+        assertTrue("the sound must hurry", buffer.currentSpeed > 1.0)
         assertEquals(0, buffer.droppedFrames)
-        assertTrue(first is PlayoutBuffer.Action.Play)
-        assertEquals(1, (first as PlayoutBuffer.Action.Play).data[0].toInt())
 
-        // The second frame of the cushion goes by unheard, the third sounds.
-        val second = play(buffer)
-        assertTrue(second is PlayoutBuffer.Action.Play)
-        val sounded = (second as PlayoutBuffer.Action.Play).data
-        // The crossfade touches only the first five milliseconds, so the
-        // end of the piece still says that the third frame is the one that
-        // came out and the second one was dropped.
-        assertEquals(3, sounded[sounded.size - 1].toInt())
-        assertEquals(1, buffer.droppedFrames)
-        assertEquals(0, buffer.depthMs)
+        // The cushion empties: the normal speed comes back.
+        repeat(6) { play(buffer) }
+        assertEquals(1.0, buffer.currentSpeed, 0.0001)
+        assertEquals(0, buffer.droppedFrames)
+    }
 
-        // The cushion is low again: the normal speed is back at once.
-        buffer.enqueue(frame(4))
-        val third = play(buffer)
-        assertTrue(third is PlayoutBuffer.Action.Play)
-        assertEquals(4, (third as PlayoutBuffer.Action.Play).data[0].toInt())
-        assertEquals(1, buffer.droppedFrames)
+    @Test
+    fun `a cushion far too thick lets the oldest sound go`() {
+        val buffer = PlayoutBuffer(
+            prebufferFrames = 1,
+            catchUpOverMs = 40,
+            catchUpHardOverMs = 100,
+            catchUpUntilMs = 20
+        )
+        repeat(20) { buffer.enqueue(frame(it + 1)) }
+
+        play(buffer)
+        assertTrue("the oldest sound must go", buffer.droppedFrames > 0)
     }
 
     @Test

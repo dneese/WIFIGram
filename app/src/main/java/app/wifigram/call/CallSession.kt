@@ -42,8 +42,11 @@ class CallSession(
         const val FRAME_SAMPLES = 320      // 20 ms
         const val FRAME_BYTES = FRAME_SAMPLES * 2
 
-        /** The cushion of the device: four frames, eighty milliseconds. */
-        const val BUFFER_FRAMES = 4
+        /** The cushion of the microphone: two frames, forty milliseconds. */
+        const val CAPTURE_FRAMES = 2
+
+        /** The cushion of the speaker: two frames, forty milliseconds. */
+        const val PLAYOUT_FRAMES = 2
 
         /** The quiet signal that says "there is no connection". */
         const val BEEP_INTERVAL = 4000L
@@ -56,6 +59,7 @@ class CallSession(
 
     private var recorder: AudioRecord? = null
     private var track: AudioTrack? = null
+    private var effects: VoiceEffects? = null
     private var captureJob: Job? = null
     private var playoutJob: Job? = null
     private val playout = PlayoutBuffer()
@@ -70,6 +74,10 @@ class CallSession(
     @Volatile
     private var signalLost = false
 
+    /** The state of the noise catcher of the phone right now. */
+    @Volatile
+    private var noiseOn = true
+
     @Volatile
     var running: Boolean = false
         private set
@@ -79,9 +87,21 @@ class CallSession(
         muted = value
     }
 
+    /** The frames of the voice that were too late and had to go. */
+    val droppedFrames: Int get() = playout.droppedFrames
+
+    /** The holes of the network that were hidden with a fading voice. */
+    val concealedFrames: Int get() = playout.concealedFrames
+
+    /** How thick the cushion of the sound was at the end. */
+    val bufferDepthMs: Int get() = playout.depthMs
+
     /** The sound goes to the speaker of the phone or to the earpiece. */
     fun setSpeaker(value: Boolean) {
         speaker = value
+        // The echo of the speaker is only a problem when the speaker is on.
+        effects?.setEcho(value)
+        applyMode()
         applyRoute()
     }
 
@@ -98,7 +118,9 @@ class CallSession(
             AudioFormat.ENCODING_PCM_16BIT
         )
         if (minBuffer <= 0) return false
-        val bufferSize = maxOf(minBuffer, FRAME_BYTES * BUFFER_FRAMES)
+        // The cushion of the microphone is two frames: the voice waits there
+        // only as long as it must.
+        val bufferSize = maxOf(minBuffer, FRAME_BYTES * CAPTURE_FRAMES)
 
         val audioRecord = try {
             AudioRecord(
@@ -112,6 +134,9 @@ class CallSession(
             null
         } ?: return false
 
+        // The speaker is quick: the track asks the hardware for the fast
+        // path and falls back to the ordinary one when the phone refuses.
+        val trackBuffer = maxOf(minBuffer / 2, FRAME_BYTES * PLAYOUT_FRAMES)
         val audioTrack = try {
             AudioTrack.Builder()
                 .setAudioAttributes(
@@ -127,19 +152,50 @@ class CallSession(
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build()
                 )
-                .setBufferSizeInBytes(bufferSize)
+                .setBufferSizeInBytes(trackBuffer)
                 .setTransferMode(AudioTrack.MODE_STREAM)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build()
         } catch (_: Exception) {
-            null
+            try {
+                AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(SAMPLE_RATE)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(trackBuffer)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+            } catch (_: Exception) {
+                null
+            }
         } ?: return false
 
         recorder = audioRecord
         track = audioTrack
         running = true
         playout.reset()
-        applyRoute()
+
+        // The helpers of the phone: the hum and the echo.
+        val voiceEffects = VoiceEffects(audioRecord)
+        effects = voiceEffects
+        noiseOn = ProfileStore.denoise(context)
+        voiceEffects.setNoise(noiseOn)
+        voiceEffects.setEcho(speaker)
+
+        // The mode first, the route second: changing the mode resets the
+        // route, and the phone would quietly forget the speaker.
         applyMode()
+        applyRoute()
 
         try {
             audioTrack.play()
@@ -161,6 +217,8 @@ class CallSession(
         try { recorder?.stop() } catch (_: Exception) { }
         try { recorder?.release() } catch (_: Exception) { }
         recorder = null
+        try { effects?.release() } catch (_: Exception) { }
+        effects = null
         try { track?.stop() } catch (_: Exception) { }
         try { track?.release() } catch (_: Exception) { }
         track = null
@@ -185,28 +243,45 @@ class CallSession(
     }
 
     private fun captureLoop(audioRecord: AudioRecord) {
-        val buffer = ByteArray(FRAME_BYTES)
+        // The microphone does not always give a whole frame at a time, so
+        // the pieces are gathered until twenty milliseconds are ready. A
+        // short frame would be a hole in the speech: the codec would make
+        // a piece of ten milliseconds and the other phone would drop it.
+        val piece = ByteArray(FRAME_BYTES)
+        val frame = ByteArray(FRAME_BYTES)
+        var filled = 0
         while (running && scope.isActive) {
             val read = try {
-                audioRecord.read(buffer, 0, buffer.size)
+                audioRecord.read(piece, 0, piece.size)
             } catch (_: Exception) {
                 -1
             }
             if (read <= 0) continue
             if (muted) {
                 // The microphone is off, the call goes on
+                filled = 0
                 continue
             }
-            val frame = buffer.copyOf(read)
-            if (ProfileStore.denoise(context)) {
-                // The hum and the fan go away, the voice stays as it is.
-                Denoiser.process(frame)
+            // The settings may turn the noise catcher while the call goes on.
+            val wanted = ProfileStore.denoise(context)
+            if (wanted != noiseOn) {
+                noiseOn = wanted
+                effects?.setNoise(wanted)
             }
-            if (OpusCodec.available) {
-                val coded = OpusCodec.encode(frame) ?: continue
-                onFrame(coded)
-            } else {
-                onFrame(frame)
+            var offset = 0
+            while (offset < read) {
+                val take = minOf(FRAME_BYTES - filled, read - offset)
+                System.arraycopy(piece, offset, frame, filled, take)
+                filled += take
+                offset += take
+                if (filled < FRAME_BYTES) break
+                filled = 0
+                if (OpusCodec.available) {
+                    val coded = OpusCodec.encode(frame) ?: continue
+                    onFrame(coded)
+                } else {
+                    onFrame(frame.copyOf())
+                }
             }
         }
     }

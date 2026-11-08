@@ -949,15 +949,21 @@ class Intercom(
     private fun endCallLocally(rememberMissed: Boolean) {
         val call = _call.value
         val outgoing = call?.phase == Phase.DIALING || call?.phase == Phase.WAITING
-        stopVoice()
+        val quality = stopVoice()
         _call.value = null
         _waiting.value = emptyList()
         signalLostAt = 0L
         if (rememberMissed && call != null) {
-            CallLogStore.add(context, call.peerName, outgoing, missed = true)
+            CallLogStore.add(
+                context, call.peerName, outgoing, missed = true,
+                dropped = quality.first, concealed = quality.second
+            )
             _missed.value = _missed.value + 1
         } else if (call != null && call.phase == Phase.ACTIVE) {
-            CallLogStore.add(context, call.peerName, outgoing, missed = false)
+            CallLogStore.add(
+                context, call.peerName, outgoing, missed = false,
+                dropped = quality.first, concealed = quality.second
+            )
         }
     }
 
@@ -993,9 +999,13 @@ class Intercom(
         session.start()
     }
 
-    private fun stopVoice() {
+    private fun stopVoice(): Pair<Int, Int> {
+        val session = voice
+        val dropped = try { session?.droppedFrames ?: 0 } catch (_: Exception) { 0 }
+        val concealed = try { session?.concealedFrames ?: 0 } catch (_: Exception) { 0 }
         try { voice?.stop() } catch (_: Exception) { }
         voice = null
+        return dropped to concealed
     }
 
     // ── the timer of the lost signal ──

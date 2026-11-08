@@ -1,10 +1,36 @@
 package app.wifigram.net
 
+import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
+
+/**
+ * The writer of the frames of one connection.
+ *
+ * The voice, the chat, the ping that keeps the connection awake and the
+ * pieces of a file may all want to speak at the same moment. One lock keeps
+ * their bytes from mixing: without it a ping that leaves in the middle of a
+ * voice frame breaks the whole stream, and the other phone hears rubbish
+ * until the connection dies.
+ */
+class FrameWriter(output: OutputStream) {
+
+    private val lock = Any()
+    private val stream = DataOutputStream(BufferedOutputStream(output))
+
+    /** Writes one frame and sends it at once. */
+    fun write(type: Int, payload: ByteArray) {
+        synchronized(lock) {
+            stream.writeByte(type)
+            stream.writeInt(payload.size)
+            stream.write(payload)
+            stream.flush()
+        }
+    }
+}
 
 /**
  * The wire format of the intercom.

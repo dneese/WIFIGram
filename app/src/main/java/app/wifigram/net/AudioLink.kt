@@ -7,7 +7,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.net.Socket
 
 /**
@@ -38,7 +37,7 @@ class AudioLink(
     }
 
     private val input = BufferedInputStream(socket.getInputStream())
-    private val output = BufferedOutputStream(socket.getOutputStream())
+    private val writer = FrameWriter(socket.getOutputStream())
     private var readJob: Job? = null
     private var pingJob: Job? = null
 
@@ -89,7 +88,7 @@ class AudioLink(
                     break
                 }
                 try {
-                    Protocol.writeFrame(output, Protocol.TYPE_PING, ByteArray(0))
+                    writer.write(Protocol.TYPE_PING, ByteArray(0))
                 } catch (_: Exception) {
                     break
                 }
@@ -100,7 +99,7 @@ class AudioLink(
     private fun handshake(initiatorSide: Boolean) {
         val hello = Protocol.encodeHello(localPeerId, localName)
         if (initiatorSide) {
-            Protocol.writeFrame(output, Protocol.TYPE_HELLO, hello)
+            writer.write(Protocol.TYPE_HELLO, hello)
             val frame = Protocol.readFrame(input) ?: throw IllegalStateException("no hello")
             if (frame.type != Protocol.TYPE_HELLO) throw IllegalStateException("wrong hello")
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
@@ -110,7 +109,7 @@ class AudioLink(
             if (frame.type != Protocol.TYPE_HELLO) throw IllegalStateException("wrong hello")
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
             remotePeerId = remote.peerId
-            Protocol.writeFrame(output, Protocol.TYPE_HELLO, hello)
+            writer.write(Protocol.TYPE_HELLO, hello)
         }
         onEvent(this@AudioLink, Event.Ready(remotePeerId))
     }
@@ -121,7 +120,7 @@ class AudioLink(
             lastWord = System.currentTimeMillis()
             when (frame.type) {
                 Protocol.TYPE_PING -> {
-                    try { Protocol.writeFrame(output, Protocol.TYPE_PONG, ByteArray(0)) } catch (_: Exception) { }
+                    try { writer.write(Protocol.TYPE_PONG, ByteArray(0)) } catch (_: Exception) { }
                 }
                 Protocol.TYPE_PONG -> Unit
                 Protocol.TYPE_AUDIO -> {
@@ -137,7 +136,7 @@ class AudioLink(
     fun sendAudio(payload: ByteArray) {
         if (closed) return
         try {
-            Protocol.writeFrame(output, Protocol.TYPE_AUDIO, payload)
+            writer.write(Protocol.TYPE_AUDIO, payload)
         } catch (_: Exception) {
             close()
         }
@@ -146,7 +145,7 @@ class AudioLink(
     fun close() {
         if (closed) return
         closed = true
-        try { Protocol.writeFrame(output, Protocol.TYPE_BYE, ByteArray(0)) } catch (_: Exception) { }
+        try { writer.write(Protocol.TYPE_BYE, ByteArray(0)) } catch (_: Exception) { }
         try { socket.close() } catch (_: Exception) { }
         pingJob?.cancel()
         readJob?.cancel()

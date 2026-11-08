@@ -97,6 +97,13 @@ fun CallsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (entry.dropped > 0 || entry.concealed > 0) {
+                        Text(
+                            text = "втрачено кадрів: ${entry.dropped}, дірок: ${entry.concealed}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
