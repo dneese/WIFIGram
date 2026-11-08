@@ -213,7 +213,7 @@ class CallSession(
      * sound that runs a little faster, the fade over a hole — and the quiet
      * beep of the lost connection keeps its place here too.
      */
-    private fun playoutLoop(audioTrack: AudioTrack) {
+    private suspend fun playoutLoop(audioTrack: AudioTrack) {
         var next = System.nanoTime()
         var lastBeep = 0L
         while (running && scope.isActive) {
