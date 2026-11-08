@@ -104,7 +104,11 @@ class PlayoutBufferTest {
         // The second frame of the cushion goes by unheard, the third sounds.
         val second = play(buffer)
         assertTrue(second is PlayoutBuffer.Action.Play)
-        assertEquals(3, (second as PlayoutBuffer.Action.Play).data[0].toInt())
+        val sounded = (second as PlayoutBuffer.Action.Play).data
+        // The crossfade touches only the first five milliseconds, so the
+        // end of the piece still says that the third frame is the one that
+        // came out and the second one was dropped.
+        assertEquals(3, sounded[sounded.size - 1].toInt())
         assertEquals(1, buffer.droppedFrames)
         assertEquals(0, buffer.depthMs)
 
