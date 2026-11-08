@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import app.wifigram.ProfileStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -197,6 +198,10 @@ class CallSession(
                 continue
             }
             val frame = buffer.copyOf(read)
+            if (ProfileStore.denoise(context)) {
+                // The hum and the fan go away, the voice stays as it is.
+                Denoiser.process(frame)
+            }
             if (OpusCodec.available) {
                 val coded = OpusCodec.encode(frame) ?: continue
                 onFrame(coded)

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.Badge
@@ -64,6 +65,7 @@ fun WifigramApp() {
     var chatPeer by remember { mutableStateOf<String?>(null) }
     var nameDialog by remember { mutableStateOf(ProfileStore.name(context).isBlank()) }
     var modeDialog by remember { mutableStateOf(false) }
+    var settingsDialog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf(CallLogStore.list(context)) }
     var missed by remember { mutableIntStateOf(CallLogStore.missedCount(context)) }
 
@@ -141,6 +143,12 @@ fun WifigramApp() {
                         }
                     },
                     actions = {
+                        IconButton(onClick = { settingsDialog = true }) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = "Налаштування"
+                            )
+                        }
                         IconButton(onClick = { modeDialog = true }) {
                             Icon(
                                 Icons.Filled.WifiTethering,
@@ -273,6 +281,14 @@ fun WifigramApp() {
                 engine.setMode(direct, host)
                 modeDialog = false
             }
+        )
+    }
+
+    if (settingsDialog) {
+        SettingsDialog(
+            denoise = ProfileStore.denoise(context),
+            onSaveDenoise = { value -> ProfileStore.saveDenoise(context, value) },
+            onDismiss = { settingsDialog = false }
         )
     }
 }

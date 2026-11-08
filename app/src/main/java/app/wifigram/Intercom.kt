@@ -600,6 +600,10 @@ class Intercom(
     // ── the chat ──
 
     private fun appendMessage(message: ChatMessage) {
+        if (!message.mine) {
+            // The phone says that a message has come.
+            MessageSound.play()
+        }
         val list = (_messages.value[message.peerId] ?: emptyList()) + message
         _messages.value = _messages.value + (message.peerId to list.takeLast(200))
         refreshConversations()

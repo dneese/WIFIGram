@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0
+
+The phone hears the voice clean, and says that a message has come.
+
+- **The noise catcher**: the hum, the fan, the machines and the engine of a car get quieter, the voice stays as it is. Speex works on the frame of twenty milliseconds, so the voice does not get later.
+- **The switch in the settings**: the noise catcher can be turned off with one finger, next to the story of the app.
+- **The story of the app**: the settings tell the version of the app and open its source on GitHub with one touch.
+- **The sound of a message**: the phone says quietly that a message has come, even when the screen is closed.
+
 ## v0.3.0
 
 The voice of the call runs faster and smoother.

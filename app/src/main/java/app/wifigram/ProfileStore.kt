@@ -13,6 +13,7 @@ object ProfileStore {
     private const val KEY_NAME = "name"
     private const val KEY_DIRECT = "direct"
     private const val KEY_HOST = "host"
+    private const val KEY_DENOISE = "denoise"
 
     fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -36,5 +37,12 @@ object ProfileStore {
             .putBoolean(KEY_DIRECT, direct)
             .putBoolean(KEY_HOST, host)
             .apply()
+    }
+
+    /** The noise catcher: the hum and the fan get quieter, the voice stays. */
+    fun denoise(context: Context): Boolean = prefs(context).getBoolean(KEY_DENOISE, true)
+
+    fun saveDenoise(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DENOISE, value).apply()
     }
 }
