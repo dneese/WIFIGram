@@ -143,7 +143,7 @@ class PlayoutBuffer(
             }
         }
 
-        val depth = depthMs()
+        val depth = depthMs
         speed = speedFor(depth)
 
         // A cushion that is far too thick holds sound that is late beyond
