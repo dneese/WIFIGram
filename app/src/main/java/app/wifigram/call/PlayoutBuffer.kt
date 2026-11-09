@@ -329,7 +329,7 @@ class PlayoutBuffer(
         }
         val under = (target - slowDownMarginMs - depth).coerceAtLeast(0)
         if (under <= 0) return 1.0
-        val span = (target - minTargetMs).coerceAtLeast(1)
+        val span = (slowDownMarginMs * 2).coerceAtLeast(1)
         val ratio = (under.toDouble() / span).coerceIn(0.0, 1.0)
         return 1.0 - ratio * (1.0 - minSpeed)
     }
