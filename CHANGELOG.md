@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.0
+
+The phone speaks your language, and the voice does not wait for the lost words.
+
+- **The language of the program**: Ukrainian or English, chosen in the settings. The choice belongs to the phone and stays there, so the program, the service and the journal of the calls all speak the same language.
+- **The voice goes over UDP**: a stream of TCP waits for a lost piece before it lets the next one through, so one lost word held the whole speech back. Over UDP a lost word costs one word and not the sentence. The phones say hello over UDP as well: when the hello comes, the way is open and the voice goes this way; when it does not come, the voice stays on the stream as it was.
+- **The cushion follows the network**: the buffer watches how the frames come and measures how much the network stumbles. The bigger the stumble, the deeper the cushion has to be, and the deeper it is, the fewer words are lost in the holes. The next call begins with the cushion that fits the network of the last one.
+- **The sound waits for the cushion when it is thin**: it runs a little slower, so the cushion grows back without a hole in the speech.
+- **The package is thin now**: the unused code and the unused icons are thrown away, so the APK is many times smaller.
+
 ## v0.4.1
 
 The voice comes back whole: the words are not lost and not cut into pieces.

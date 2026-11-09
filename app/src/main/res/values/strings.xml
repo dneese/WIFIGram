@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WIFIGram</string>
+    <string name="app_name" translatable="false">WIFIGram</string>
     <string name="service_channel">Станція</string>
     <string name="call_channel">Дзвінки</string>
     <string name="service_waiting">Очікує телефони в мережі</string>
