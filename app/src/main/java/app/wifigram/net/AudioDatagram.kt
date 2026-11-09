@@ -73,7 +73,11 @@ class AudioDatagram(
             val size = try {
                 sock.receive(packet)
             } catch (_: Exception) {
-                if (sock.isClosed) break else continue
+                -1
+            }
+            if (size < 0) {
+                if (sock.isClosed) break
+                continue
             }
             val bytes = packet.data.copyOf(size)
             val from = packet.address ?: continue
