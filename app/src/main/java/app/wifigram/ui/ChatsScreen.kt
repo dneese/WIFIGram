@@ -77,28 +77,19 @@ fun ChatsScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (last != null && last.mine) {
-                            Text(
-                                text = stringResource(R.string.chat_you) + " ",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            text = when {
-                                last == null -> ""
-                                last.fileName != null ->
-                                    stringResource(R.string.chat_file, last.fileName ?: "")
-                                else -> last.text
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (unread > 0) FontWeight.Medium else FontWeight.Normal,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = when {
+                            last == null -> ""
+                            last.fileName != null ->
+                                stringResource(R.string.chat_file, last.fileName ?: "")
+                            else -> last.text
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (unread > 0) FontWeight.Medium else FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(

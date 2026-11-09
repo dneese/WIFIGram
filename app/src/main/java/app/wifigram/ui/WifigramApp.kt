@@ -267,7 +267,13 @@ fun WifigramApp() {
                             peer = peers.firstOrNull { it.id == openPeer },
                             onBack = { chatPeer = null },
                             onPickFile = { filePicker.launch(arrayOf("*/*")) },
-                            onCall = { startCall(openPeer) }
+                            onCall = {
+                                if (peers.any { it.id == openPeer && it.online }) {
+                                    startCall(openPeer)
+                                } else {
+                                    scope.launch { snackbar.showSnackbar(offlineText) }
+                                }
+                            }
                         )
                     }
                 }

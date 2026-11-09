@@ -57,7 +57,6 @@
     <string name="chat_empty_hint">Напишіть перше повідомлення</string>
     <string name="chat_copied">Скопійовано</string>
     <string name="chat_scroll_down">Униз</string>
-    <string name="chat_you">Ви:</string>
     <string name="chat_sent">Надіслано</string>
     <string name="chat_delivered">Доставлено</string>
     <string name="chat_queued">Чекає з\'єднання</string>

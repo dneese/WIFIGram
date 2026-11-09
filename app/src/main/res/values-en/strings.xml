@@ -56,7 +56,6 @@
     <string name="chat_empty_hint">Write the first message</string>
     <string name="chat_copied">Copied</string>
     <string name="chat_scroll_down">Down</string>
-    <string name="chat_you">You:</string>
     <string name="chat_sent">Sent</string>
     <string name="chat_delivered">Delivered</string>
     <string name="chat_queued">Waiting for the connection</string>
