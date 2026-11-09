@@ -70,7 +70,7 @@ class AudioDatagram(
         val buffer = ByteArray(MAX_PACKET)
         while (scope.isActive && !sock.isClosed) {
             val packet = DatagramPacket(buffer, buffer.size)
-            val size = try {
+            val size: Int = try {
                 sock.receive(packet)
             } catch (_: Exception) {
                 -1
