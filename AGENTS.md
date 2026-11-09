@@ -24,12 +24,14 @@ gh run view <run-id> --log-failed
 ## Нативні бібліотеки
 
 - `app/src/main/cpp/opus` — Opus 1.5.2 (вендорено, читає `Makefile.am`, `configure.ac`, `package_version`).
-- `app/src/main/cpp/speexdsp` — SpeexDSP 1.2.1 (вендорено, лише препроцесор).
-- Обидві збираються статично в `wifigram-opus` через `app/src/main/cpp/CMakeLists.txt`.
-- CMake потребує `-DFLOATING_POINT -DOUTSIDE_SPEEX -DRANDOM_PREFIX=wfg -DUSE_SMALLFT=1 -DEXPORT=` і `-include speex/speexdsp_types.h` — без цих defines Speex не компілюється.
+- Збирається статично в `wifigram-opus` через `app/src/main/cpp/CMakeLists.txt`.
+- SpeexDSP прибрано у v0.4.1: його шумопоглиначав голос разом із гуком. Тепер шум і ехо прибирає сам телефон (`call/VoiceEffects.kt`).
 
 ## Код
 
 - Kotlin, без сторонніх бібліотек, окрім Compose та AndroidX. Коментарі в коді — англійською, рядки для користувача — українською.
-- Налаштування — у `ProfileStore` (SharedPreferences).
-- Звук дзвінка — `CallSession`, буфер — `call/PlayoutBuffer.kt`, кодек — `call/OpusCodec.kt`, шумопоглинання — `call/Denoiser.kt`.
+- Налаштування — у `ProfileStore` (SharedPreferences). Мова програми — теж там (`Locales`).
+- Звук дзвінка — `CallSession`, буфер — `call/PlayoutBuffer.kt` ( cushions follows the measured jitter), кодек — `call/OpusCodec.kt`, шум і ехо — `call/VoiceEffects.kt`.
+- Голос іде по UDP (`net/AudioDatagram.kt`, порт 45314) з fallback на TCP (`net/AudioLink.kt`) і підтвердженням прийому (ack).
+- Рядки — у `res/values/strings.xml` (укр) і `res/values-en/strings.xml` (англ); неhardcode-ити текст у Kotlin.
+- Release-збірка ввімкнена з R8 (`isMinifyEnabled`), тому JNI-класи треба тримати в `app/proguard-rules.pro`.
