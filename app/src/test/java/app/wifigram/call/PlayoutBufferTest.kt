@@ -11,14 +11,21 @@ class PlayoutBufferTest {
 
     private fun play(buffer: PlayoutBuffer): PlayoutBuffer.Action = buffer.nextFrame()
 
+    /** The frames come one after another, as they do on a quiet network. */
+    private fun fill(buffer: PlayoutBuffer, count: Int, from: Int = 1, arrival: Long = 1000L) {
+        repeat(count) { index ->
+            buffer.enqueue(frame(from + index), arrival + index * PlayoutBuffer.FRAME_MS)
+        }
+    }
+
     @Test
     fun `waits until the cushion is full`() {
         val buffer = PlayoutBuffer()
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Wait)
-        buffer.enqueue(frame(1))
-        buffer.enqueue(frame(2))
+        buffer.enqueue(frame(1), 1000L)
+        buffer.enqueue(frame(2), 1020L)
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Wait)
-        buffer.enqueue(frame(3))
+        buffer.enqueue(frame(3), 1040L)
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Play)
         assertTrue(buffer.startedPlayout)
     }
@@ -26,7 +33,7 @@ class PlayoutBufferTest {
     @Test
     fun `plays the frames in the order they came`() {
         val buffer = PlayoutBuffer()
-        repeat(4) { buffer.enqueue(frame(it + 1)) }
+        fill(buffer, 4)
         val first = play(buffer)
         val second = play(buffer)
         val third = play(buffer)
@@ -41,7 +48,7 @@ class PlayoutBufferTest {
     @Test
     fun `ignores a piece of the wrong size`() {
         val buffer = PlayoutBuffer()
-        buffer.enqueue(ByteArray(10))
+        buffer.enqueue(ByteArray(10), 1000L)
         assertEquals(0, buffer.depthMs)
         assertTrue(buffer.nextFrame() is PlayoutBuffer.Action.Wait)
     }
@@ -51,7 +58,7 @@ class PlayoutBufferTest {
         // Ten frames are two hundred milliseconds: above the line of the
         // catch-up, so the sound has to run a little faster.
         val buffer = PlayoutBuffer()
-        repeat(10) { buffer.enqueue(frame(it + 1)) }
+        fill(buffer, 10)
 
         val heard = mutableSetOf<Int>()
         repeat(12) {
@@ -70,16 +77,12 @@ class PlayoutBufferTest {
     @Test
     fun `the sound runs faster only while the cushion is thick`() {
         val buffer = PlayoutBuffer(
-            prebufferFrames = 1,
-            catchUpOverMs = 40,
-            catchUpHardOverMs = 100_000,
-            catchUpUntilMs = 20
+            catchUpMarginMs = 20,
+            hardDropMarginMs = 100_000
         )
-        buffer.enqueue(frame(1))
-        buffer.enqueue(frame(2))
-        buffer.enqueue(frame(3))
+        fill(buffer, 6)
 
-        // The cushion of sixty milliseconds is above the line of forty.
+        // The cushion of a hundred milliseconds is above the line.
         play(buffer)
         assertTrue("the sound must hurry", buffer.currentSpeed > 1.0)
         assertEquals(0, buffer.droppedFrames)
@@ -93,12 +96,10 @@ class PlayoutBufferTest {
     @Test
     fun `a cushion far too thick lets the oldest sound go`() {
         val buffer = PlayoutBuffer(
-            prebufferFrames = 1,
-            catchUpOverMs = 40,
-            catchUpHardOverMs = 100,
-            catchUpUntilMs = 20
+            catchUpMarginMs = 20,
+            hardDropMarginMs = 40
         )
-        repeat(20) { buffer.enqueue(frame(it + 1)) }
+        fill(buffer, 20)
 
         play(buffer)
         assertTrue("the oldest sound must go", buffer.droppedFrames > 0)
@@ -107,7 +108,7 @@ class PlayoutBufferTest {
     @Test
     fun `a hole in the network fades instead of stopping dead`() {
         val buffer = PlayoutBuffer()
-        repeat(4) { buffer.enqueue(frame(60)) }
+        fill(buffer, 4, from = 60)
         repeat(4) { assertTrue(play(buffer) is PlayoutBuffer.Action.Play) }
 
         // The cushion is empty: the last sound fades away.
@@ -132,13 +133,13 @@ class PlayoutBufferTest {
     @Test
     fun `the sound that comes back after a hole fades into it`() {
         val buffer = PlayoutBuffer()
-        repeat(4) { buffer.enqueue(frame(60)) }
+        fill(buffer, 4, from = 60)
         repeat(4) { play(buffer) }
         // The cushion runs dry and the last sound fades.
         val hole = play(buffer)
         assertTrue(hole is PlayoutBuffer.Action.Conceal)
 
-        buffer.enqueue(frame(120))
+        buffer.enqueue(frame(120), 2000L)
         val back = play(buffer)
         assertTrue(back is PlayoutBuffer.Action.Play)
         val data = (back as PlayoutBuffer.Action.Play).data
@@ -150,7 +151,7 @@ class PlayoutBufferTest {
     @Test
     fun `reset empties the cushion and starts anew`() {
         val buffer = PlayoutBuffer()
-        repeat(6) { buffer.enqueue(frame(1)) }
+        fill(buffer, 6)
         play(buffer)
         assertTrue(buffer.startedPlayout)
         buffer.reset()
@@ -164,11 +165,52 @@ class PlayoutBufferTest {
     @Test
     fun `stale sound of two seconds is thrown away`() {
         val buffer = PlayoutBuffer(
-            prebufferFrames = 1,
-            catchUpOverMs = 100_000,
-            catchUpUntilMs = 100_000
+            catchUpMarginMs = 100_000,
+            hardDropMarginMs = 100_000
         )
-        repeat(PlayoutBuffer.MAX_FRAMES + 50) { buffer.enqueue(frame(it)) }
+        repeat(PlayoutBuffer.MAX_FRAMES + 50) {
+            buffer.enqueue(frame(it), 1000L + it * PlayoutBuffer.FRAME_MS)
+        }
         assertEquals(PlayoutBuffer.MAX_FRAMES * PlayoutBuffer.FRAME_MS, buffer.depthMs)
+    }
+
+    @Test
+    fun `the cushion grows with the jitter of the network`() {
+        val buffer = PlayoutBuffer()
+        // The frames come in bursts: five at once, then a long pause.
+        repeat(5) { buffer.enqueue(frame(it + 1), 1000L) }
+        repeat(5) { buffer.enqueue(frame(it + 6), 1200L) }
+        repeat(5) { buffer.enqueue(frame(it + 11), 1220L) }
+
+        assertTrue("the network must be seen as unsteady", buffer.measuredJitterMs > 5.0)
+        assertTrue(
+            "the cushion must follow the network",
+            buffer.targetDepthMs > PlayoutBuffer.BASE_TARGET_MS
+        )
+    }
+
+    @Test
+    fun `the cushion of the next call begins with what the last call learned`() {
+        val buffer = PlayoutBuffer(seedJitterMs = 25.0)
+        assertEquals(160, buffer.targetDepthMs)
+    }
+
+    @Test
+    fun `the sound runs slower when the cushion is thin`() {
+        // The network of the last call was unsteady: the cushion is deep.
+        val buffer = PlayoutBuffer(seedJitterMs = 30.0)
+        assertEquals(180, buffer.targetDepthMs)
+        fill(buffer, 12)
+
+        // The cushion is thinner than it should be: the sound slows down a
+        // little, so the cushion grows back without a hole in the speech.
+        repeat(3) { play(buffer) }
+        assertTrue("the sound must wait a little", buffer.currentSpeed < 1.0)
+    }
+
+    @Test
+    fun `the cushion is never deeper than the limit`() {
+        val buffer = PlayoutBuffer(seedJitterMs = 1000.0)
+        assertEquals(PlayoutBuffer.MAX_TARGET_MS, buffer.targetDepthMs)
     }
 }

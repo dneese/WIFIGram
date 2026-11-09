@@ -76,7 +76,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // The program is small: the unused code and the unused icons are
+            // thrown away, so the phone gets a thin package.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

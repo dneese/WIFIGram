@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import app.wifigram.call.CallSession
 import app.wifigram.call.OpusCodec
+import app.wifigram.net.AudioDatagram
 import app.wifigram.net.AudioLink
 import app.wifigram.net.DirectBridge
 import app.wifigram.net.Discovery
@@ -99,6 +100,15 @@ class Intercom(
 
         /** How long a phone may be quiet before it leaves the station. */
         const val PEER_TTL = 30_000L
+
+        /** How often the hello over UDP goes to the phones of the network. */
+        const val HELLO_EVERY_MS = 3000L
+
+        /** How long the answer to a hello waits before it is repeated. */
+        const val HELLO_REPLY_AFTER_MS = 1500L
+
+        /** How long the way over UDP is trusted after the last hello. */
+        const val UDP_ALIVE_MS = 10_000L
     }
 
     private val peerId: String = run {
@@ -138,6 +148,23 @@ class Intercom(
     private val links = ConcurrentHashMap<String, PeerLink>()
     private val audioLinks = ConcurrentHashMap<String, AudioLink>()
     private val audioMaintenance = ConcurrentHashMap.newKeySet<String>()
+
+    /** Where every phone of the network can be reached. */
+    private val peerAddresses = ConcurrentHashMap<String, InetAddress>()
+
+    /** When the hello of every phone came the last time. */
+    private val udpAlive = ConcurrentHashMap<String, Long>()
+
+    /** When the hello was sent to every phone the last time. */
+    private val helloSent = ConcurrentHashMap<String, Long>()
+
+    /** How much the network stumbles, for every phone of the network. */
+    private val peerJitter = ConcurrentHashMap<String, Double>()
+
+    /** When the last piece of the voice of every phone came. */
+    private val lastVoiceArrival = ConcurrentHashMap<String, Long>()
+
+    private var audioDatagram: AudioDatagram? = null
     private val connecting = ConcurrentHashMap<String, Boolean>()
     private val known = ConcurrentHashMap<String, Peer>()
     private val seenMessages = ConcurrentHashMap<String, Boolean>()
@@ -188,6 +215,23 @@ class Intercom(
             }
         }
 
+        // The voice may also travel over UDP, where a lost word costs one
+        // word and not the whole sentence.
+        val datagram = AudioDatagram(
+            localPeerId = peerId,
+            scope = scope,
+            onHello = { id, address -> handleDatagramHello(id, address) },
+            onAudio = { audio, id, address -> handleDatagramAudio(audio, id, address) }
+        )
+        datagram.start()
+        audioDatagram = datagram
+        scope.launch(Dispatchers.IO) {
+            while (running) {
+                delay(HELLO_EVERY_MS)
+                sendDatagramHellos()
+            }
+        }
+
         scope.launch(Dispatchers.IO) { startDiscovery(sendEnabled = true) }
 
         if (directMode) startDirect()
@@ -212,6 +256,11 @@ class Intercom(
         }
         audioLinks.clear()
         audioMaintenance.clear()
+        try { audioDatagram?.stop() } catch (_: Exception) { }
+        audioDatagram = null
+        peerAddresses.clear()
+        udpAlive.clear()
+        helloSent.clear()
         links.values.forEach { link ->
             try { link.close() } catch (_: Exception) { }
         }
@@ -338,6 +387,7 @@ class Intercom(
         status: String
     ) {
         if (remoteId == peerId) return
+        peerAddresses[remoteId] = address
         val existing = known[remoteId]
         known[remoteId] = Peer(
             id = remoteId,
@@ -550,8 +600,65 @@ class Intercom(
         }
     }
 
+    /**
+     * The hello of the other phone came: the way over UDP is open, and the
+     * answer says that it is open on our side too.
+     */
+    private fun handleDatagramHello(remoteId: String, address: InetAddress) {
+        if (remoteId == peerId) return
+        peerAddresses[remoteId] = address
+        udpAlive[remoteId] = System.currentTimeMillis()
+        val last = helloSent[remoteId] ?: 0L
+        if (System.currentTimeMillis() - last > HELLO_REPLY_AFTER_MS) {
+            helloSent[remoteId] = System.currentTimeMillis()
+            audioDatagram?.sendHello(address)
+        }
+    }
+
+    /** One piece of the voice came over UDP. */
+    private fun handleDatagramAudio(audio: Protocol.Audio, remoteId: String, address: InetAddress) {
+        if (remoteId == peerId) return
+        peerAddresses[remoteId] = address
+        udpAlive[remoteId] = System.currentTimeMillis()
+        handleAudioFrame(remoteId, audio)
+    }
+
+    /** Says hello to every phone of the network, so the way stays open. */
+    private fun sendDatagramHellos() {
+        val datagram = audioDatagram ?: return
+        val now = System.currentTimeMillis()
+        peerAddresses.forEach { (id, address) ->
+            if (id == peerId) return@forEach
+            val last = helloSent[id] ?: 0L
+            if (now - last < HELLO_REPLY_AFTER_MS) return@forEach
+            helloSent[id] = now
+            datagram.sendHello(address)
+        }
+    }
+
+    /**
+     * Sends one piece of the voice to one phone.
+     *
+     * The way over UDP is used when the hello of the other phone came
+     * recently; then a lost word costs one word and not the whole sentence.
+     * When the hello is late, the piece goes the old way, over the stream.
+     */
+    private fun sendVoice(remoteId: String, payload: ByteArray) {
+        val address = peerAddresses[remoteId]
+        if (address != null) {
+            val last = udpAlive[remoteId] ?: 0L
+            if (System.currentTimeMillis() - last < UDP_ALIVE_MS) {
+                if (audioDatagram?.sendAudio(address, payload) == true) return
+            }
+        }
+        val voiceLink = audioLinks[remoteId]
+        if (voiceLink != null) voiceLink.sendAudio(payload)
+        else links[remoteId]?.send(Protocol.TYPE_AUDIO, payload)
+    }
+
     /** One piece of the voice arrived, from the voice socket or the usual one. */
     private fun handleAudioFrame(remoteId: String, audio: Protocol.Audio) {
+        measureJitter(remoteId)
         val call = _call.value
         if (call == null || audio.callId != call.callId) return
         if (audio.members.contains(peerId)) {
@@ -569,6 +676,26 @@ class Intercom(
         }
     }
 
+    /**
+     * Watches how the pieces of the voice come.
+     *
+     * The difference between the way they were sent and the way they arrived
+     * says how much the network stumbles. The next call begins with a cushion
+     * that is deep enough for such a network.
+     */
+    private fun measureJitter(remoteId: String) {
+        val now = System.currentTimeMillis()
+        val last = lastVoiceArrival.put(remoteId, now) ?: -1L
+        if (last < 0) return
+        val stumble = kotlin.math.abs((now - last) - 20L).toDouble()
+        val known = peerJitter[remoteId] ?: 0.0
+        peerJitter[remoteId] = known + (stumble - known) / 16.0
+    }
+
+    /** The cushion that fits the worst phone of the conversation. */
+    private fun jitterSeedMs(call: Intercom.Call): Double =
+        call.participants.mapNotNull { peerJitter[it.id] }.maxOrNull() ?: 0.0
+
     private fun relayAudio(audio: Protocol.Audio, fromRemoteId: String) {
         links.values.forEach { other ->
             if (other.remotePeerId == fromRemoteId) return@forEach
@@ -582,9 +709,7 @@ class Intercom(
                 opus = audio.opus,
                 hops = audio.hops - 1
             )
-            val voiceLink = audioLinks[other.remotePeerId]
-            if (voiceLink != null) voiceLink.sendAudio(payload)
-            else other.send(Protocol.TYPE_AUDIO, payload)
+            sendVoice(other.remotePeerId, payload)
         }
     }
 
@@ -962,7 +1087,8 @@ class Intercom(
         if (voice != null) return
         // A new call: the words of the old one are not remembered.
         lastPlayed.clear()
-        val session = CallSession(context, scope) { frame ->
+        val seed = _call.value?.let { jitterSeedMs(it) } ?: 0.0
+        val session = CallSession(context, scope, seed) { frame ->
             val call = _call.value ?: return@CallSession
             // The list of the phones of the conversation, the sender is in it
             val members = call.participants.map { it.id } + peerId
@@ -981,9 +1107,7 @@ class Intercom(
                     direct = direct,
                     opus = OpusCodec.available
                 )
-                val voiceLink = audioLinks[link.remotePeerId]
-                if (voiceLink != null) voiceLink.sendAudio(payload)
-                else link.send(Protocol.TYPE_AUDIO, payload)
+                sendVoice(link.remotePeerId, payload)
             }
         }
         voice = session

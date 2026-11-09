@@ -1,21 +1,30 @@
 package app.wifigram.call
 
 import java.util.ArrayDeque
+import kotlin.math.abs
 
 /**
  * The cushion between the wire and the speaker.
  *
  * The network gives the sound in bursts: a quiet moment, then a rush of
  * frames. Played straight away, every rush adds its delay to the call and
- * the delay never goes away. This buffer keeps a small cushion of sound and
- * decides what the speaker hears:
+ * the delay never goes away. This buffer keeps a cushion of sound and
+ * decides what the speaker hears.
+ *
+ * The cushion is not a fixed number. The buffer watches how the frames come:
+ * the difference between the way they were sent and the way they arrived
+ * says how much the network stumbles. The bigger the stumble, the deeper the
+ * cushion has to be, and the deeper it is, the fewer words are lost in the
+ * holes. The cushion follows the network:
  *
  * - the cushion is thin after a gap: the last sound fades away instead of
  *   stopping dead, so a hole in the network is felt less;
  * - the cushion grew too thick: the sound runs a little faster than life —
  *   the words are all there, the voice is a little quicker until the
  *   cushion is small again. Nothing is thrown away, because a thrown-away
- *   frame is a hole in the speech.
+ *   frame is a hole in the speech;
+ * - the cushion is too thin: the sound runs a little slower, so the cushion
+ *   grows back without a hole in the speech.
  *
  * The class knows nothing about Android, so every rule of it is tested.
  */
@@ -23,12 +32,17 @@ class PlayoutBuffer(
     private val frameBytes: Int = FRAME_BYTES,
     private val frameMs: Int = FRAME_MS,
     private val frameSamples: Int = FRAME_SAMPLES,
-    private val prebufferFrames: Int = PREBUFFER_FRAMES,
-    private val catchUpOverMs: Int = CATCH_UP_OVER_MS,
-    private val catchUpHardOverMs: Int = CATCH_UP_HARD_OVER_MS,
-    private val catchUpUntilMs: Int = CATCH_UP_UNTIL_MS,
+    private val baseTargetMs: Int = BASE_TARGET_MS,
+    private val minTargetMs: Int = MIN_TARGET_MS,
+    private val maxTargetMs: Int = MAX_TARGET_MS,
+    private val jitterFactor: Double = JITTER_FACTOR,
+    private val catchUpMarginMs: Int = CATCH_UP_MARGIN_MS,
+    private val slowDownMarginMs: Int = SLOW_DOWN_MARGIN_MS,
+    private val hardDropMarginMs: Int = HARD_DROP_MARGIN_MS,
     private val maxSpeed: Double = MAX_SPEED,
-    private val plcFrames: Int = PLC_FRAMES
+    private val minSpeed: Double = MIN_SPEED,
+    private val plcFrames: Int = PLC_FRAMES,
+    private val seedJitterMs: Double = 0.0
 ) {
 
     /** What the speaker does with one tick of the clock. */
@@ -51,20 +65,35 @@ class PlayoutBuffer(
         const val FRAME_MS = 20
         const val FRAME_SAMPLES = 320
 
-        /** How much sound is kept before the speaker starts. */
-        const val PREBUFFER_FRAMES = 3
+        /** The cushion the program aims at: three frames of sound. */
+        const val BASE_TARGET_MS = 60
 
-        /** The cushion above which the sound starts to run faster. */
-        const val CATCH_UP_OVER_MS = 140
+        /** The cushion never gets thinner than this. */
+        const val MIN_TARGET_MS = 60
 
-        /** The cushion above which the oldest sound is late beyond saving. */
-        const val CATCH_UP_HARD_OVER_MS = 340
+        /** The cushion never gets thicker than this. */
+        const val MAX_TARGET_MS = 320
 
-        /** The cushion below which the normal speed comes back. */
-        const val CATCH_UP_UNTIL_MS = 80
+        /** The cushion grows with the measured jitter of the network. */
+        const val JITTER_FACTOR = 4.0
+
+        /** Above the cushion, the sound starts to run faster. */
+        const val CATCH_UP_MARGIN_MS = 40
+
+        /** Below the cushion, the sound runs a little slower. */
+        const val SLOW_DOWN_MARGIN_MS = 20
+
+        /** Below the cushion, the normal speed comes back. */
+        const val CATCH_UP_UNTIL_MARGIN_MS = 20
+
+        /** Far above the cushion, the oldest sound is late beyond saving. */
+        const val HARD_DROP_MARGIN_MS = 200
 
         /** How much faster the sound may run while the cushion is thick. */
         const val MAX_SPEED = 1.06
+
+        /** How much slower the sound may run while the cushion is thin. */
+        const val MIN_SPEED = 0.96
 
         /** How many frames of hole are pretended before the silence. */
         const val PLC_FRAMES = 5
@@ -95,12 +124,32 @@ class PlayoutBuffer(
     private var dropped = 0
     private var concealed = 0
 
+    /** How much the network stumbles, in milliseconds. */
+    private var jitterMs: Double = seedJitterMs
+
+    /** When the last frame came. */
+    private var lastArrival: Long = -1L
+
     /** The sound that arrived and waits for the speaker. */
     val depthMs: Int
         get() = synchronized(this) {
             val rest = current?.let { frameSamples - position } ?: 0.0
             ((queue.size * frameMs) + (rest * frameMs / frameSamples)).toInt()
         }
+
+    /**
+     * The cushion the buffer aims at.
+     *
+     * It follows the network: the more the network stumbles, the deeper the
+     * cushion has to be.
+     */
+    val targetDepthMs: Int
+        get() = synchronized(this) {
+            (baseTargetMs + jitterFactor * jitterMs).toInt().coerceIn(minTargetMs, maxTargetMs)
+        }
+
+    /** How much the network stumbles, in milliseconds. */
+    val measuredJitterMs: Double get() = synchronized(this) { jitterMs }
 
     val startedPlayout: Boolean
         get() = synchronized(this) { started }
@@ -113,9 +162,18 @@ class PlayoutBuffer(
     val currentSpeed: Double get() = synchronized(this) { speed }
 
     /** One piece of sound arrived from the network. */
-    fun enqueue(frame: ByteArray) {
+    fun enqueue(frame: ByteArray, arrivalMs: Long = System.currentTimeMillis()) {
         if (frame.size != frameBytes) return
         synchronized(this) {
+            if (lastArrival >= 0) {
+                // The difference between the way the frames came and the way
+                // they were sent: the bigger it is, the more the network
+                // stumbles. The number moves slowly, so one bad moment does
+                // not make the cushion jump.
+                val stumble = abs((arrivalMs - lastArrival) - frameMs)
+                jitterMs += (stumble - jitterMs) / 16.0
+            }
+            lastArrival = arrivalMs
             // A cushion that grew out of proportion means a long silence of
             // the network followed by a rush; the oldest sound is stale.
             while (queue.size >= MAX_FRAMES) {
@@ -127,8 +185,11 @@ class PlayoutBuffer(
 
     /** What the speaker does at this tick of the clock: every 20 ms. */
     fun nextFrame(): Action = synchronized(this) {
+        val target = targetDepthMs
         if (!started) {
-            if (queue.size < prebufferFrames) return Action.Wait
+            // The speaker waits until the cushion is as deep as the network
+            // needs it.
+            if (depthMs < target) return Action.Wait
             started = true
             current = queue.pollFirst()
             position = 0.0
@@ -144,11 +205,11 @@ class PlayoutBuffer(
         }
 
         val depth = depthMs
-        speed = speedFor(depth)
+        speed = speedFor(depth, target)
 
         // A cushion that is far too thick holds sound that is late beyond
         // saving. The oldest frame goes, the rest is played.
-        if (depth > catchUpHardOverMs && queue.size > 1) {
+        if (depth > target + hardDropMarginMs && queue.size > 1) {
             queue.pollFirst()
             dropped++
             crossfade = true
@@ -245,19 +306,32 @@ class PlayoutBuffer(
         return ((high shl 8) or low).toShort().toDouble()
     }
 
-    /** The speed of the sound: the thicker the cushion, the quicker it runs. */
-    private fun speedFor(depth: Int): Double {
+    /**
+     * The speed of the sound.
+     *
+     * The cushion is thick: the sound runs a little faster and the cushion
+     * gets thin again. The cushion is thin: the sound runs a little slower
+     * and the cushion grows back. Between the two lines the sound keeps the
+     * speed of life.
+     */
+    private fun speedFor(depth: Int, target: Int): Double {
         if (catchingUp) {
             // The catch-up has its own hysteresis: it ends below the lower
             // line, so the speed does not flicker around one number.
-            if (depth <= catchUpUntilMs) catchingUp = false
-        } else if (depth > catchUpOverMs) {
+            if (depth <= target - CATCH_UP_UNTIL_MARGIN_MS) catchingUp = false
+        } else if (depth > target + catchUpMarginMs) {
             catchingUp = true
         }
-        if (!catchingUp) return 1.0
-        val span = (catchUpHardOverMs - catchUpUntilMs).coerceAtLeast(1)
-        val over = (depth - catchUpUntilMs).coerceAtLeast(0).coerceAtMost(span)
-        return 1.0 + (over.toDouble() / span) * (maxSpeed - 1.0)
+        if (catchingUp) {
+            val span = (hardDropMarginMs - CATCH_UP_UNTIL_MARGIN_MS).coerceAtLeast(1)
+            val over = (depth - (target - CATCH_UP_UNTIL_MARGIN_MS)).coerceIn(0, span)
+            return 1.0 + (over.toDouble() / span) * (maxSpeed - 1.0)
+        }
+        val under = (target - slowDownMarginMs - depth).coerceAtLeast(0)
+        if (under <= 0) return 1.0
+        val span = (target - minTargetMs).coerceAtLeast(1)
+        val ratio = (under.toDouble() / span).coerceIn(0.0, 1.0)
+        return 1.0 - ratio * (1.0 - minSpeed)
     }
 
     /** Mixes the start of the new frame out of the end of the old one. */
@@ -290,6 +364,8 @@ class PlayoutBuffer(
             lastPlayed = null
             dropped = 0
             concealed = 0
+            jitterMs = seedJitterMs
+            lastArrival = -1L
         }
     }
 }

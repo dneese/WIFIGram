@@ -34,6 +34,7 @@ import kotlin.math.sin
 class CallSession(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val jitterSeedMs: Double = 0.0,
     private val onFrame: (ByteArray) -> Unit
 ) {
 
@@ -62,7 +63,7 @@ class CallSession(
     private var effects: VoiceEffects? = null
     private var captureJob: Job? = null
     private var playoutJob: Job? = null
-    private val playout = PlayoutBuffer()
+    private val playout = PlayoutBuffer(seedJitterMs = jitterSeedMs)
     private val silence = ByteArray(FRAME_BYTES)
 
     @Volatile
@@ -239,7 +240,7 @@ class CallSession(
         } else {
             data
         }
-        playout.enqueue(pcm)
+        playout.enqueue(pcm, System.currentTimeMillis())
     }
 
     private fun captureLoop(audioRecord: AudioRecord) {
