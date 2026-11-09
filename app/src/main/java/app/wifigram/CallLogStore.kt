@@ -40,7 +40,8 @@ object CallLogStore {
     ) {
         val entry = Entry(
             id = UUID.randomUUID().toString().take(8),
-            name = name.replace("|", "/").trim().ifEmpty { "Телефон" },
+            name = name.replace("|", "/").trim()
+                .ifEmpty { Locales.apply(context).getString(R.string.phone_fallback) },
             timestamp = System.currentTimeMillis(),
             outgoing = outgoing,
             missed = missed,

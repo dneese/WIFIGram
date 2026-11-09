@@ -222,7 +222,7 @@ class Intercom(
     }
 
     fun rename(value: String) {
-        localName = value.trim().ifEmpty { "Телефон" }
+        localName = value.trim().ifEmpty { defaultName() }
     }
 
     /** Switches between the plain network and the direct connection. */
@@ -245,7 +245,7 @@ class Intercom(
             onOwnerAddress = { address ->
                 scope.launch(Dispatchers.IO) { connectToAddress(address, Protocol.TCP_PORT) }
             },
-            onStatus = { value -> _status.value = statusText(value) }
+            onStatus = { value -> _status.value = value }
         )
         directBridge = bridge
         if (hostMode) bridge.startOwner() else bridge.startClient()
@@ -326,17 +326,8 @@ class Intercom(
         }
     }
 
-    /** The words of the state of the connection. */
-    private fun statusText(value: String): String = when (value) {
-        "wifi-direct-group" -> "Створення групи WiFi Direct..."
-        "wifi-direct-group-ready" -> "Група WiFi Direct готова"
-        "wifi-direct-search" -> "Пошук групи WiFi Direct..."
-        "wifi-direct-connecting" -> "Підключення до групи..."
-        "wifi-direct-failed" -> "WiFi Direct не вдався"
-        "wifi-direct-unavailable" -> "WiFi Direct недоступний"
-        "wifi-direct-channel-lost" -> "Зв'язок WiFi Direct втрачено"
-        else -> ""
-    }
+    /** The name of a phone that has no name of its own. */
+    private fun defaultName(): String = Locales.apply(context).getString(R.string.phone_fallback)
 
     /** A phone has said that it is here. */
     private fun onPeerFound(
@@ -350,7 +341,7 @@ class Intercom(
         val existing = known[remoteId]
         known[remoteId] = Peer(
             id = remoteId,
-            name = remoteName.ifBlank { existing?.name ?: "Телефон" },
+            name = remoteName.ifBlank { existing?.name ?: defaultName() },
             status = status,
             online = true,
             lastSeen = System.currentTimeMillis()
@@ -388,7 +379,7 @@ class Intercom(
                     val old = known[remoteId]
                     known[remoteId] = Peer(
                         id = remoteId,
-                        name = event.name.ifBlank { old?.name ?: "Телефон" },
+                        name = event.name.ifBlank { old?.name ?: defaultName() },
                         status = old?.status ?: STATUS_FREE,
                         online = true,
                         lastSeen = System.currentTimeMillis()
@@ -406,7 +397,7 @@ class Intercom(
                 val remoteId = link.remotePeerId
                 if (remoteId.isBlank()) return
                 if (seenMessages.putIfAbsent(event.line.id, true) != null) return
-                val peerName = known[remoteId]?.name ?: "Телефон"
+                val peerName = known[remoteId]?.name ?: defaultName()
                 appendMessage(
                     ChatMessage(
                         id = event.line.id,
@@ -446,7 +437,7 @@ class Intercom(
                             ChatMessage(
                                 id = java.util.UUID.randomUUID().toString(),
                                 peerId = link.remotePeerId,
-                                peerName = known[link.remotePeerId]?.name ?: "Телефон",
+                                peerName = known[link.remotePeerId]?.name ?: defaultName(),
                                 text = "",
                                 timestamp = System.currentTimeMillis(),
                                 mine = false,
@@ -635,7 +626,7 @@ class Intercom(
             ChatMessage(
                 id = line.id,
                 peerId = peerId,
-                peerName = known[peerId]?.name ?: "Телефон",
+                peerName = known[peerId]?.name ?: defaultName(),
                 text = line.text,
                 timestamp = line.timestamp,
                 mine = true
@@ -661,7 +652,7 @@ class Intercom(
                     ChatMessage(
                         id = java.util.UUID.randomUUID().toString(),
                         peerId = peerId,
-                        peerName = known[peerId]?.name ?: "Телефон",
+                        peerName = known[peerId]?.name ?: defaultName(),
                         text = "",
                         timestamp = System.currentTimeMillis(),
                         mine = true,
@@ -823,7 +814,7 @@ class Intercom(
                     if (!_waiting.value.any { it.id == remoteId }) {
                         _waiting.value = _waiting.value + Participant(
                             remoteId,
-                            signal.name.ifBlank { known[remoteId]?.name ?: "Телефон" },
+                            signal.name.ifBlank { known[remoteId]?.name ?: defaultName() },
                             true
                         )
                     }
@@ -832,9 +823,9 @@ class Intercom(
                         callId = signal.callId,
                         phase = Phase.INCOMING,
                         peerId = remoteId,
-                        peerName = signal.name.ifBlank { known[remoteId]?.name ?: "Телефон" },
+                        peerName = signal.name.ifBlank { known[remoteId]?.name ?: defaultName() },
                         participants = listOf(
-                            Participant(remoteId, signal.name.ifBlank { "Телефон" }, true)
+                            Participant(remoteId, signal.name.ifBlank { defaultName() }, true)
                         ),
                         startedAt = System.currentTimeMillis()
                     )
@@ -873,15 +864,15 @@ class Intercom(
                 if (call == null || call.phase == Phase.WAITING) {
                     val members = signal.extra.split(",").filter { it.isNotBlank() }
                     val participants = members.map { id ->
-                        Participant(id, known[id]?.name ?: "Телефон", true)
+                        Participant(id, known[id]?.name ?: defaultName(), true)
                     }.ifEmpty {
-                        listOf(Participant(remoteId, signal.name.ifBlank { "Телефон" }, true))
+                        listOf(Participant(remoteId, signal.name.ifBlank { defaultName() }, true))
                     }
                     _call.value = Call(
                         callId = signal.callId,
                         phase = Phase.ACTIVE,
                         peerId = remoteId,
-                        peerName = signal.name.ifBlank { known[remoteId]?.name ?: "Телефон" },
+                        peerName = signal.name.ifBlank { known[remoteId]?.name ?: defaultName() },
                         participants = participants,
                         startedAt = System.currentTimeMillis()
                     )

@@ -1,5 +1,6 @@
 package app.wifigram.ui
 
+import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wifigram.App
@@ -47,6 +49,7 @@ import app.wifigram.CallLogStore
 import app.wifigram.Intercom
 import app.wifigram.IntercomService
 import app.wifigram.ProfileStore
+import app.wifigram.R
 import kotlinx.coroutines.delay
 
 /**
@@ -80,8 +83,8 @@ fun WifigramApp() {
     }
 
     val peerName = chatPeer?.let { id ->
-        peers.firstOrNull { it.id == id }?.name ?: "Телефон"
-    } ?: "Телефон"
+        peers.firstOrNull { it.id == id }?.name ?: stringResource(R.string.phone_fallback)
+    } ?: stringResource(R.string.phone_fallback)
 
     var pendingCall by remember { mutableStateOf<String?>(null) }
     val micPermission = rememberLauncherForActivityResult(
@@ -127,15 +130,15 @@ fun WifigramApp() {
                         Column {
                             Text(
                                 text = when (tab) {
-                                    0 -> "Дзвінки"
-                                    2 -> "Повідомлення"
-                                    else -> "Інтерком"
+                                    0 -> stringResource(R.string.tab_calls)
+                                    2 -> stringResource(R.string.tab_messages)
+                                    else -> stringResource(R.string.tab_intercom)
                                 },
                                 fontWeight = FontWeight.SemiBold
                             )
                             if (tab == 1) {
                                 Text(
-                                    text = "${peers.count { it.online }} у мережі",
+                                    text = stringResource(R.string.peers_online, peers.count { it.online }),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -146,19 +149,19 @@ fun WifigramApp() {
                         IconButton(onClick = { settingsDialog = true }) {
                             Icon(
                                 Icons.Filled.Settings,
-                                contentDescription = "Налаштування"
+                                contentDescription = stringResource(R.string.action_settings)
                             )
                         }
                         IconButton(onClick = { modeDialog = true }) {
                             Icon(
                                 Icons.Filled.WifiTethering,
-                                contentDescription = "Режим зв'язку"
+                                contentDescription = stringResource(R.string.action_mode)
                             )
                         }
                         IconButton(onClick = { nameDialog = true }) {
                             Icon(
                                 Icons.Filled.Edit,
-                                contentDescription = "Ім'я"
+                                contentDescription = stringResource(R.string.action_name)
                             )
                         }
                     },
@@ -179,19 +182,19 @@ fun WifigramApp() {
                                 Icon(Icons.Filled.History, contentDescription = null)
                             }
                         },
-                        label = { Text("Дзвінки") }
+                        label = { Text(stringResource(R.string.tab_calls)) }
                     )
                     NavigationBarItem(
                         selected = tab == 1,
                         onClick = { tab = 1 },
                         icon = { Icon(Icons.Filled.Call, contentDescription = null) },
-                        label = { Text("Інтерком") }
+                        label = { Text(stringResource(R.string.tab_intercom)) }
                     )
                     NavigationBarItem(
                         selected = tab == 2,
                         onClick = { tab = 2 },
                         icon = { Icon(Icons.Filled.Chat, contentDescription = null) },
-                        label = { Text("Чат") }
+                        label = { Text(stringResource(R.string.station_chat)) }
                     )
                 }
             }
@@ -288,6 +291,11 @@ fun WifigramApp() {
         SettingsDialog(
             denoise = ProfileStore.denoise(context),
             onSaveDenoise = { value -> ProfileStore.saveDenoise(context, value) },
+            language = ProfileStore.language(context),
+            onSaveLanguage = { value ->
+                ProfileStore.saveLanguage(context, value)
+                (context as? Activity)?.recreate()
+            },
             onDismiss = { settingsDialog = false }
         )
     }

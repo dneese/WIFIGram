@@ -14,6 +14,7 @@ object ProfileStore {
     private const val KEY_DIRECT = "direct"
     private const val KEY_HOST = "host"
     private const val KEY_DENOISE = "denoise"
+    private const val KEY_LANGUAGE = "language"
 
     fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -44,5 +45,13 @@ object ProfileStore {
 
     fun saveDenoise(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_DENOISE, value).apply()
+    }
+
+    /** The language of the program: Ukrainian or English. */
+    fun language(context: Context): String =
+        prefs(context).getString(KEY_LANGUAGE, Locales.UKRAINIAN) ?: Locales.UKRAINIAN
+
+    fun saveLanguage(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_LANGUAGE, value).apply()
     }
 }

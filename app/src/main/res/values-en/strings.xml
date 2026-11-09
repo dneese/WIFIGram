@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="service_channel">Station</string>
+    <string name="call_channel">Calls</string>
+    <string name="service_waiting">Waiting for phones on the network</string>
+    <string name="service_peers">Phones on the network: %1$d</string>
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_reject">Reject</string>
+
+    <!-- the tabs and the actions of the bar -->
+    <string name="tab_calls">Calls</string>
+    <string name="tab_messages">Messages</string>
+    <string name="tab_intercom">Intercom</string>
+    <string name="peers_online">%1$d on the network</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_mode">Connection mode</string>
+    <string name="action_name">Name</string>
+
+    <!-- the screen of the call -->
+    <string name="call_state_calling">Calling</string>
+    <string name="call_state_incoming">Incoming call</string>
+    <string name="call_state_busy">The line is busy</string>
+    <string name="call_state_active">Conversation</string>
+    <string name="call_calling">The phone is calling…</string>
+    <string name="call_caller">Who is calling</string>
+    <string name="call_waiting_line">You are waiting on the line</string>
+    <string name="call_no_signal">No connection, waiting…</string>
+    <string name="call_in_conversation">In conversation: %1$s</string>
+    <string name="call_waiting_list">Waiting on the line:</string>
+    <string name="call_add">Add</string>
+    <string name="call_microphone">Microphone</string>
+    <string name="call_speaker">Speaker</string>
+    <string name="call_earpiece">Earpiece</string>
+    <string name="call_end">End</string>
+    <string name="call_cancel">Cancel</string>
+
+    <!-- the journal of the calls -->
+    <string name="calls_empty">No calls yet</string>
+    <string name="calls_clear">Clear</string>
+    <string name="calls_quality">frames lost: %1$d, holes: %2$d</string>
+
+    <!-- the chat -->
+    <string name="chat_back">Back</string>
+    <string name="chat_file">File: %1$s</string>
+    <string name="chat_file_button">File</string>
+    <string name="chat_input">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chats_empty">No messages yet</string>
+
+    <!-- the station -->
+    <string name="station_empty">No other phones</string>
+    <string name="station_hint">Start WIFIGram on another phone on this network</string>
+    <string name="station_count">Station: %1$d phones on the network</string>
+    <string name="station_chat">Chat</string>
+    <string name="station_call">Call</string>
+
+    <!-- the state of a phone -->
+    <string name="status_lost">connection lost</string>
+    <string name="status_active">in conversation</string>
+    <string name="status_calling">calling</string>
+    <string name="status_free">free</string>
+    <string name="phone_fallback">Phone</string>
+
+    <!-- the dialogs -->
+    <string name="name_title">Your name</string>
+    <string name="name_hint">The other phones on the network will see this name.</string>
+    <string name="name_label">Name</string>
+    <string name="ready">Done</string>
+    <string name="mode_title">Connection mode</string>
+    <string name="mode_network">Network: all phones on one WiFi network.</string>
+    <string name="mode_direct">WiFi Direct: two phones directly, without a router.</string>
+    <string name="mode_network_chip">Network</string>
+    <string name="mode_create">Create</string>
+    <string name="mode_join">Join</string>
+    <string name="mode_hint">Press “Create” on one phone and “Join” on the other.</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_noise">Noise suppression</string>
+    <string name="settings_noise_hint">The hum, the fan and the engine become quieter</string>
+    <string name="settings_unavailable">Not available on this phone</string>
+    <string name="settings_echo_ok">The echo of the speaker is taken away while the phone is on the speaker.</string>
+    <string name="settings_echo_none">This phone cannot take the echo of the speaker away.</string>
+    <string name="about_title">About</string>
+    <string name="about_text">WIFIGram — an intercom between phones on one WiFi network. The voice travels as Opus over UDP, the phone itself takes the noise away.</string>
+    <string name="version_label">Version %1$s</string>
+    <string name="language_uk">Українська</string>
+    <string name="language_en">English</string>
+
+    <!-- the states of the direct connection -->
+    <string name="wifi_direct_failed">WiFi Direct failed</string>
+    <string name="wifi_direct_unavailable">WiFi Direct is not available</string>
+    <string name="wifi_direct_group_ready">The WiFi Direct group is ready</string>
+    <string name="wifi_direct_channel_lost">The WiFi Direct connection is lost</string>
+    <string name="wifi_direct_connecting">Joining the group…</string>
+    <string name="wifi_direct_search">Looking for a WiFi Direct group…</string>
+    <string name="wifi_direct_group">Creating a WiFi Direct group…</string>
+</resources>

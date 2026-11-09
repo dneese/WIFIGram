@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wifigram.Intercom
+import app.wifigram.R
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,7 +78,7 @@ fun ChatScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.Filled.ArrowBack,
-                    contentDescription = "Назад",
+                    contentDescription = stringResource(R.string.chat_back),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -121,7 +123,7 @@ fun ChatScreen(
                         }
                         if (message.fileName != null) {
                             Text(
-                                text = "Файл: ${message.fileName}",
+                                text = stringResource(R.string.chat_file, message.fileName ?: ""),
                                 fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -151,14 +153,14 @@ fun ChatScreen(
             IconButton(onClick = onPickFile) {
                 Icon(
                     Icons.Filled.AttachFile,
-                    contentDescription = "Файл",
+                    contentDescription = stringResource(R.string.chat_file_button),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Повідомлення") },
+                placeholder = { Text(stringResource(R.string.chat_input)) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4
             )
@@ -172,7 +174,7 @@ fun ChatScreen(
             ) {
                 Icon(
                     Icons.Filled.Send,
-                    contentDescription = "Надіслати",
+                    contentDescription = stringResource(R.string.chat_send),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

@@ -31,7 +31,8 @@ object App {
             val created = Intercom(
                 context = app,
                 scope = scope,
-                name = ProfileStore.name(app).ifEmpty { "Телефон" },
+                name = ProfileStore.name(app)
+                    .ifEmpty { Locales.apply(app).getString(R.string.phone_fallback) },
                 direct = ProfileStore.direct(app),
                 host = ProfileStore.host(app)
             )

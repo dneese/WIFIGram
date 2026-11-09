@@ -37,12 +37,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wifigram.Intercom
+import app.wifigram.R
 import kotlinx.coroutines.delay
 
 /**
@@ -90,10 +92,10 @@ fun CallScreen(
 
             Text(
                 text = when (current.phase) {
-                    Intercom.Phase.DIALING -> "Виклик"
-                    Intercom.Phase.INCOMING -> "Вхідний дзвінок"
-                    Intercom.Phase.WAITING -> "Лінія зайнята"
-                    Intercom.Phase.ACTIVE -> "Розмова"
+                    Intercom.Phase.DIALING -> stringResource(R.string.call_state_calling)
+                    Intercom.Phase.INCOMING -> stringResource(R.string.call_state_incoming)
+                    Intercom.Phase.WAITING -> stringResource(R.string.call_state_busy)
+                    Intercom.Phase.ACTIVE -> stringResource(R.string.call_state_active)
                 },
                 fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -117,9 +119,9 @@ fun CallScreen(
 
             Text(
                 text = when (current.phase) {
-                    Intercom.Phase.DIALING -> "Телефон викликає…"
-                    Intercom.Phase.INCOMING -> "Хто дзвонить"
-                    Intercom.Phase.WAITING -> "Ви чекаєте на лінії"
+                    Intercom.Phase.DIALING -> stringResource(R.string.call_calling)
+                    Intercom.Phase.INCOMING -> stringResource(R.string.call_caller)
+                    Intercom.Phase.WAITING -> stringResource(R.string.call_waiting_line)
                     Intercom.Phase.ACTIVE -> "%02d:%02d".format(seconds / 60, seconds % 60)
                 },
                 fontSize = 18.sp,
@@ -129,7 +131,7 @@ fun CallScreen(
             if (current.signalLost) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Немає зв'язку, очікуємо…",
+                    text = stringResource(R.string.call_no_signal),
                     fontSize = 15.sp,
                     color = CallRed
                 )
@@ -138,7 +140,10 @@ fun CallScreen(
             if (current.phase == Intercom.Phase.ACTIVE && current.participants.size > 1) {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "У розмові: " + current.participants.joinToString(", ") { it.name },
+                    text = stringResource(
+                        R.string.call_in_conversation,
+                        current.participants.joinToString(", ") { it.name }
+                    ),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -155,7 +160,7 @@ fun CallScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Чекають на лінії:",
+                        text = stringResource(R.string.call_waiting_list),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -171,7 +176,7 @@ fun CallScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             TextButton(onClick = { onAdd(participant.id) }) {
-                                Text("Додати")
+                                Text(stringResource(R.string.call_add))
                             }
                         }
                     }
@@ -187,13 +192,13 @@ fun CallScreen(
                     ) {
                         CallButton(
                             icon = Icons.Filled.CallEnd,
-                            description = "Відхилити",
+                            description = stringResource(R.string.call_reject),
                             color = CallRed,
                             onClick = onReject
                         )
                         CallButton(
                             icon = Icons.Filled.Call,
-                            description = "Відповісти",
+                            description = stringResource(R.string.call_answer),
                             color = CallGreen,
                             onClick = onAnswer
                         )
@@ -203,7 +208,7 @@ fun CallScreen(
                 Intercom.Phase.DIALING, Intercom.Phase.WAITING -> {
                     CallButton(
                         icon = Icons.Filled.CallEnd,
-                        description = "Скасувати",
+                        description = stringResource(R.string.call_cancel),
                         color = CallRed,
                         onClick = onCancel
                     )
@@ -217,19 +222,23 @@ fun CallScreen(
                     ) {
                         CallButton(
                             icon = if (current.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                            description = if (current.muted) "Мікрофон" else "Мікрофон",
+                            description = stringResource(R.string.call_microphone),
                             color = if (current.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                             onClick = onToggleMute
                         )
                         CallButton(
                             icon = if (current.speaker) Icons.Filled.VolumeUp else Icons.Filled.VolumeDown,
-                            description = if (current.speaker) "Динамік" else "Вухо",
+                            description = if (current.speaker) {
+                                stringResource(R.string.call_speaker)
+                            } else {
+                                stringResource(R.string.call_earpiece)
+                            },
                             color = if (current.speaker) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                             onClick = onToggleSpeaker
                         )
                         CallButton(
                             icon = Icons.Filled.CallEnd,
-                            description = "Завершити",
+                            description = stringResource(R.string.call_end),
                             color = CallRed,
                             onClick = onEnd
                         )

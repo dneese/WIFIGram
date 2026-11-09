@@ -24,10 +24,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.wifigram.CallLogStore
+import app.wifigram.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,7 +45,7 @@ fun CallsScreen(
     if (entries.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                text = "Дзвінків ще не було",
+                text = stringResource(R.string.calls_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -62,7 +64,7 @@ fun CallsScreen(
                     .padding(end = 8.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End
             ) {
-                TextButton(onClick = onClear) { Text("Очистити") }
+                TextButton(onClick = onClear) { Text(stringResource(R.string.calls_clear)) }
             }
         }
         items(entries, key = { it.id }) { entry ->
@@ -99,7 +101,11 @@ fun CallsScreen(
                     )
                     if (entry.dropped > 0 || entry.concealed > 0) {
                         Text(
-                            text = "втрачено кадрів: ${entry.dropped}, дірок: ${entry.concealed}",
+                            text = stringResource(
+                                R.string.calls_quality,
+                                entry.dropped,
+                                entry.concealed
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

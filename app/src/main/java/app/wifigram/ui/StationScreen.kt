@@ -30,10 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.wifigram.Intercom
+import app.wifigram.R
 
 /**
  * The station: every phone in the network that runs WIFIGram.
@@ -63,13 +65,13 @@ fun StationScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Немає інших телефонів",
+                    text = stringResource(R.string.station_empty),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Запустіть WIFIGram на іншому телефоні в цій мережі",
+                    text = stringResource(R.string.station_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 32.dp)
@@ -86,7 +88,7 @@ fun StationScreen(
         if (status.isNotBlank()) {
             item {
                 Text(
-                    text = status,
+                    text = directStatusText(status),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 20.dp, top = 8.dp)
@@ -95,7 +97,7 @@ fun StationScreen(
         }
         item {
             Text(
-                text = "Станція: ${peers.count { it.online }} телефонів у мережі",
+                text = stringResource(R.string.station_count, peers.count { it.online }),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp)
@@ -141,14 +143,14 @@ fun StationScreen(
                 IconButton(onClick = { onChat(peer.id) }) {
                     Icon(
                         Icons.Filled.Chat,
-                        contentDescription = "Чат",
+                        contentDescription = stringResource(R.string.station_chat),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 IconButton(onClick = { onCall(peer.id) }) {
                     Icon(
                         Icons.Filled.Call,
-                        contentDescription = "Дзвінок",
+                        contentDescription = stringResource(R.string.station_call),
                         tint = CallGreen
                     )
                 }

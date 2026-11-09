@@ -8,5 +8,94 @@
     <string name="call_incoming">Вхідний дзвінок</string>
     <string name="call_answer">Відповісти</string>
     <string name="call_reject">Відхилити</string>
+
+    <!-- the tabs and the actions of the bar -->
+    <string name="tab_calls">Дзвінки</string>
+    <string name="tab_messages">Повідомлення</string>
+    <string name="tab_intercom">Інтерком</string>
+    <string name="peers_online">%1$d у мережі</string>
+    <string name="action_settings">Налаштування</string>
+    <string name="action_mode">Режим зв\'язку</string>
+    <string name="action_name">Ім\'я</string>
+
+    <!-- the screen of the call -->
+    <string name="call_state_calling">Виклик</string>
+    <string name="call_state_incoming">Вхідний дзвінок</string>
+    <string name="call_state_busy">Лінія зайнята</string>
+    <string name="call_state_active">Розмова</string>
+    <string name="call_calling">Телефон викликає…</string>
+    <string name="call_caller">Хто дзвонить</string>
+    <string name="call_waiting_line">Ви чекаєте на лінії</string>
+    <string name="call_no_signal">Немає зв\'язку, очікуємо…</string>
+    <string name="call_in_conversation">У розмові: %1$s</string>
+    <string name="call_waiting_list">Чекають на лінії:</string>
+    <string name="call_add">Додати</string>
+    <string name="call_microphone">Мікрофон</string>
+    <string name="call_speaker">Динамік</string>
+    <string name="call_earpiece">Вухо</string>
+    <string name="call_end">Завершити</string>
+    <string name="call_cancel">Скасувати</string>
+
+    <!-- the journal of the calls -->
+    <string name="calls_empty">Дзвінків ще не було</string>
+    <string name="calls_clear">Очистити</string>
+    <string name="calls_quality">втрачено кадрів: %1$d, дірок: %2$d</string>
+
+    <!-- the chat -->
+    <string name="chat_back">Назад</string>
+    <string name="chat_file">Файл: %1$s</string>
+    <string name="chat_file_button">Файл</string>
+    <string name="chat_input">Повідомлення</string>
+    <string name="chat_send">Надіслати</string>
+    <string name="chats_empty">Повідомлень ще немає</string>
+
+    <!-- the station -->
+    <string name="station_empty">Немає інших телефонів</string>
+    <string name="station_hint">Запустіть WIFIGram на іншому телефоні в цій мережі</string>
+    <string name="station_count">Станція: %1$d телефонів у мережі</string>
+    <string name="station_chat">Чат</string>
+    <string name="station_call">Дзвінок</string>
+
+    <!-- the state of a phone -->
+    <string name="status_lost">зв\'язок втрачено</string>
+    <string name="status_active">у розмові</string>
+    <string name="status_calling">дзвонить</string>
+    <string name="status_free">вільний</string>
+    <string name="phone_fallback">Телефон</string>
+
+    <!-- the dialogs -->
+    <string name="name_title">Ваше ім\'я</string>
+    <string name="name_hint">Це ім\'я побачать інші телефони в мережі.</string>
+    <string name="name_label">Ім\'я</string>
+    <string name="ready">Готово</string>
+    <string name="mode_title">Режим зв\'язку</string>
+    <string name="mode_network">Мережа: усі телефони в одній мережі WiFi.</string>
+    <string name="mode_direct">WiFi Direct: два телефони напряму, без роутера.</string>
+    <string name="mode_network_chip">Мережа</string>
+    <string name="mode_create">Створити</string>
+    <string name="mode_join">Приєднатися</string>
+    <string name="mode_hint">На одному телефоні натисніть «Створити», на іншому «Приєднатися».</string>
+    <string name="settings_title">Налаштування</string>
+    <string name="settings_language">Мова програми</string>
+    <string name="settings_noise">Шумопоглинання</string>
+    <string name="settings_noise_hint">Гул, вентиляція і двигун стають тихішими</string>
+    <string name="settings_unavailable">На цьому телефоні недоступне</string>
+    <string name="settings_echo_ok">Ехо від динаміка прибирається саме, поки телефон у спікерфоні.</string>
+    <string name="settings_echo_none">Ехо від динаміка на цьому телефоні прибирати нечем.</string>
+    <string name="about_title">О програмі</string>
+    <string name="about_text">WIFIGram — інтерком між телефонами в одній мережі WiFi. Голос іде кодом Opus по UDP, шум прибирає сам телефон.</string>
+    <string name="version_label">Версія %1$s</string>
+    <string name="language_uk">Українська</string>
+    <string name="language_en">English</string>
+
+    <!-- the states of the direct connection -->
+    <string name="wifi_direct_failed">WiFi Direct не вдався</string>
+    <string name="wifi_direct_unavailable">WiFi Direct недоступний</string>
+    <string name="wifi_direct_group_ready">Група WiFi Direct готова</string>
+    <string name="wifi_direct_channel_lost">Зв\'язок WiFi Direct втрачено</string>
+    <string name="wifi_direct_connecting">Підключення до групи...</string>
+    <string name="wifi_direct_search">Пошук групи WiFi Direct...</string>
+    <string name="wifi_direct_group">Створення групи WiFi Direct...</string>
+
     <color name="ic_launcher_background">#1A73E8</color>
 </resources>

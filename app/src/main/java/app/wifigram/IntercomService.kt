@@ -64,13 +64,18 @@ class IntercomService : Service() {
         }
     }
 
+    /** The words of the service speak the chosen language. */
+    private fun text(id: Int): String = Locales.apply(this).getString(id)
+
+    private fun text(id: Int, count: Int): String = Locales.apply(this).getString(id, count)
+
     private fun stationNotification(): Notification {
         val peers = engine.peers.value.count { it.online }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
+            .setContentTitle(text(R.string.app_name))
             .setContentText(
-                if (peers > 0) getString(R.string.service_peers, peers)
-                else getString(R.string.service_waiting)
+                if (peers > 0) text(R.string.service_peers, peers)
+                else text(R.string.service_waiting)
             )
             .setSmallIcon(R.drawable.ic_stat_call)
             .setOngoing(true)
@@ -102,7 +107,7 @@ class IntercomService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CALL_CHANNEL_ID)
-            .setContentTitle(getString(R.string.call_incoming))
+            .setContentTitle(text(R.string.call_incoming))
             .setContentText(call.peerName)
             .setSmallIcon(R.drawable.ic_stat_call)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -110,8 +115,8 @@ class IntercomService : Service() {
             .setOngoing(true)
             .setFullScreenIntent(full, true)
             .setContentIntent(full)
-            .addAction(R.drawable.ic_stat_call, getString(R.string.call_answer), answer)
-            .addAction(R.drawable.ic_stat_call, getString(R.string.call_reject), reject)
+            .addAction(R.drawable.ic_stat_call, text(R.string.call_answer), answer)
+            .addAction(R.drawable.ic_stat_call, text(R.string.call_reject), reject)
             .build()
     }
 
@@ -129,14 +134,14 @@ class IntercomService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val station = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.service_channel),
+            text(R.string.service_channel),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             setShowBadge(false)
         }
         val call = NotificationChannel(
             CALL_CHANNEL_ID,
-            getString(R.string.call_channel),
+            text(R.string.call_channel),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             enableVibration(true)

@@ -17,10 +17,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.wifigram.Intercom
+import app.wifigram.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,7 +38,7 @@ fun ChatsScreen(
     if (conversations.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                text = "Повідомлень ще немає",
+                text = stringResource(R.string.chats_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -82,7 +84,8 @@ fun ChatsScreen(
                     Text(
                         text = when {
                             last == null -> ""
-                            last.fileName != null -> "Файл: ${last.fileName}"
+                            last.fileName != null ->
+                                stringResource(R.string.chat_file, last.fileName ?: "")
                             else -> last.text
                         },
                         style = MaterialTheme.typography.bodyMedium,

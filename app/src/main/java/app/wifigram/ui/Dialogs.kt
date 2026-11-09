@@ -24,7 +24,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.wifigram.Locales
+import app.wifigram.R
 
 /** The name of the phone, the other phones see it in the station. */
 @Composable
@@ -32,14 +35,14 @@ fun NameDialog(initial: String, onSave: (String) -> Unit) {
     var name by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = { },
-        title = { Text("Ваше ім'я") },
+        title = { Text(stringResource(R.string.name_title)) },
         text = {
             Column {
-                Text("Це ім'я побачать інші телефони в мережі.")
+                Text(stringResource(R.string.name_hint))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Ім'я") },
+                    label = { Text(stringResource(R.string.name_label)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -49,10 +52,10 @@ fun NameDialog(initial: String, onSave: (String) -> Unit) {
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim().ifEmpty { "Телефон" }) },
+                onClick = { onSave(name.trim().ifEmpty { stringResource(R.string.phone_fallback) }) },
                 enabled = name.isNotBlank()
             ) {
-                Text("Готово")
+                Text(stringResource(R.string.ready))
             }
         }
     )
@@ -73,11 +76,11 @@ fun ModeDialog(
 
     AlertDialog(
         onDismissRequest = { },
-        title = { Text("Режим зв'язку") },
+        title = { Text(stringResource(R.string.mode_title)) },
         text = {
             Column {
-                Text("Мережа: усі телефони в одній мережі WiFi.")
-                Text("WiFi Direct: два телефони напряму, без роутера.")
+                Text(stringResource(R.string.mode_network))
+                Text(stringResource(R.string.mode_direct))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -86,7 +89,7 @@ fun ModeDialog(
                     FilterChip(
                         selected = !isDirect,
                         onClick = { isDirect = false },
-                        label = { Text("Мережа") },
+                        label = { Text(stringResource(R.string.mode_network_chip)) },
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     FilterChip(
@@ -104,17 +107,17 @@ fun ModeDialog(
                         FilterChip(
                             selected = isHost,
                             onClick = { isHost = true },
-                            label = { Text("Створити") },
+                            label = { Text(stringResource(R.string.mode_create)) },
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         FilterChip(
                             selected = !isHost,
                             onClick = { isHost = false },
-                            label = { Text("Приєднатися") }
+                            label = { Text(stringResource(R.string.mode_join)) }
                         )
                     }
                     Text(
-                        text = "На одному телефоні натисніть «Створити», на іншому «Приєднатися».",
+                        text = stringResource(R.string.mode_hint),
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                         color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp)
@@ -124,7 +127,7 @@ fun ModeDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(isDirect, isHost) }) {
-                Text("Готово")
+                Text(stringResource(R.string.ready))
             }
         }
     )
@@ -138,6 +141,8 @@ fun ModeDialog(
 fun SettingsDialog(
     denoise: Boolean,
     onSaveDenoise: (Boolean) -> Unit,
+    language: String,
+    onSaveLanguage: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var isDenoise by remember { mutableStateOf(denoise) }
@@ -154,23 +159,53 @@ fun SettingsDialog(
 
     AlertDialog(
         onDismissRequest = { },
-        title = { Text("Налаштування") },
+        title = { Text(stringResource(R.string.settings_title)) },
         text = {
             Column {
+                Text(
+                    text = stringResource(R.string.settings_language),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    FilterChip(
+                        selected = language == Locales.UKRAINIAN,
+                        onClick = {
+                            onSaveDenoise(isDenoise)
+                            onSaveLanguage(Locales.UKRAINIAN)
+                        },
+                        label = { Text(stringResource(R.string.language_uk)) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    FilterChip(
+                        selected = language == Locales.ENGLISH,
+                        onClick = {
+                            onSaveDenoise(isDenoise)
+                            onSaveLanguage(Locales.ENGLISH)
+                        },
+                        label = { Text(stringResource(R.string.language_en)) }
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Шумопоглинання")
+                        Text(stringResource(R.string.settings_noise))
                         Text(
-                            text = "Гул, вентиляція і двигун стають тихішими",
+                            text = stringResource(R.string.settings_noise_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (!noiseReady) {
                             Text(
-                                text = "На цьому телефоні недоступне",
+                                text = stringResource(R.string.settings_unavailable),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -185,9 +220,9 @@ fun SettingsDialog(
 
                 Text(
                     text = if (echoReady) {
-                        "Ехо від динаміка прибирається саме, поки телефон у спікерфоні."
+                        stringResource(R.string.settings_echo_ok)
                     } else {
-                        "Ехо від динаміка на цьому телефоні прибирати нечем."
+                        stringResource(R.string.settings_echo_none)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -196,10 +231,9 @@ fun SettingsDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-                Text("О програмі")
+                Text(stringResource(R.string.about_title))
                 Text(
-                    text = "WIFIGram — інтерком між телефонами в одній мережі WiFi. " +
-                        "Голос іде кодом Opus, шум прибирає Speex.",
+                    text = stringResource(R.string.about_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
@@ -222,7 +256,7 @@ fun SettingsDialog(
                 }
                 if (version.isNotBlank()) {
                     Text(
-                        text = "Версія $version",
+                        text = stringResource(R.string.version_label, version),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -234,7 +268,7 @@ fun SettingsDialog(
                 onSaveDenoise(isDenoise)
                 onDismiss()
             }) {
-                Text("Готово")
+                Text(stringResource(R.string.ready))
             }
         }
     )
