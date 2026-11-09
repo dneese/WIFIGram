@@ -27,7 +27,7 @@ import java.net.InetSocketAddress
 class AudioDatagram(
     private val localPeerId: String,
     private val scope: CoroutineScope,
-    private val onHello: (peerId: String, address: InetAddress) -> Unit,
+    private val onHello: (peerId: String, address: InetAddress, ack: Int) -> Unit,
     private val onAudio: (audio: Protocol.Audio, peerId: String, address: InetAddress) -> Unit
 ) {
 
@@ -86,7 +86,7 @@ class AudioDatagram(
             val from = packet.address ?: continue
             val parsed = parse(bytes) ?: continue
             when (parsed.type) {
-                TYPE_HELLO -> onHello(parsed.senderId, from)
+                TYPE_HELLO -> onHello(parsed.senderId, from, parsed.ack)
                 TYPE_AUDIO -> {
                     val audio = Protocol.decodeAudio(parsed.payload) ?: continue
                     onAudio(audio, parsed.senderId, from)
@@ -95,9 +95,15 @@ class AudioDatagram(
         }
     }
 
-    /** Says hello to a phone: the answer proves that the way is open. */
-    fun sendHello(address: InetAddress): Boolean {
-        val packet = build(TYPE_HELLO, ByteArray(0)) ?: return false
+    /**
+     * Says hello to a phone: the answer proves that the way is open.
+     *
+     * The number of the last piece of the voice that came from that phone
+     * travels with the hello, so the phone that talks knows that the words
+     * arrive and can fall back to the stream when they do not.
+     */
+    fun sendHello(address: InetAddress, ack: Int = 0): Boolean {
+        val packet = build(TYPE_HELLO, ByteArray(0), ack) ?: return false
         return send(packet, address)
     }
 
@@ -127,16 +133,24 @@ class AudioDatagram(
 
     // ── the shape of the packet ──
 
-    internal class Packet(val type: Int, val senderId: String, val payload: ByteArray)
+    internal class Packet(
+        val type: Int,
+        val senderId: String,
+        val ack: Int,
+        val payload: ByteArray
+    )
 
     /**
-     * The packet says: [magic(4)][version(1)][type(1)][sender][addressee][body].
-     * The names are short, so the whole packet stays small.
+     * The packet says:
+     * [magic(4)][version(1)][type(1)][sender][addressee][ack(4)][body].
+     * The names are short, so the whole packet stays small. The answer is
+     * the number of the last piece of the voice that came: the phone that
+     * talks knows then that the way is open in both directions.
      */
-    internal fun build(type: Int, payload: ByteArray): ByteArray? {
+    internal fun build(type: Int, payload: ByteArray, ack: Int = 0): ByteArray? {
         val sender = localPeerId.toByteArray(Charsets.UTF_8)
         if (sender.size > 255) return null
-        val out = ByteArray(4 + 1 + 1 + 1 + sender.size + 1 + payload.size)
+        val out = ByteArray(4 + 1 + 1 + 1 + sender.size + 1 + 4 + payload.size)
         var at = 0
         MAGIC.copyInto(out, at)
         at += 4
@@ -146,6 +160,10 @@ class AudioDatagram(
         sender.copyInto(out, at)
         at += sender.size
         out[at++] = 0
+        out[at++] = (ack shr 24).toByte()
+        out[at++] = (ack shr 16).toByte()
+        out[at++] = (ack shr 8).toByte()
+        out[at++] = ack.toByte()
         payload.copyInto(out, at)
         return out
     }
@@ -162,8 +180,13 @@ class AudioDatagram(
         val senderId = String(bytes, at, senderLength, Charsets.UTF_8)
         at += senderLength
         val addresseeLength = bytes[at++].toInt() and 0xFF
-        if (bytes.size < at + addresseeLength) return null
+        if (bytes.size < at + addresseeLength + 4) return null
         at += addresseeLength
-        return Packet(type, senderId, bytes.copyOfRange(at, bytes.size))
+        val ack = ((bytes[at].toInt() and 0xFF) shl 24) or
+            ((bytes[at + 1].toInt() and 0xFF) shl 16) or
+            ((bytes[at + 2].toInt() and 0xFF) shl 8) or
+            (bytes[at + 3].toInt() and 0xFF)
+        at += 4
+        return Packet(type, senderId, ack, bytes.copyOfRange(at, bytes.size))
     }
 }

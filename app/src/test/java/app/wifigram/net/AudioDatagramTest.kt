@@ -12,7 +12,7 @@ class AudioDatagramTest {
     private fun datagram(peerId: String = "phone-1"): AudioDatagram = AudioDatagram(
         localPeerId = peerId,
         scope = CoroutineScope(Dispatchers.Unconfined),
-        onHello = { _, _ -> },
+        onHello = { _, _, _ -> },
         onAudio = { _, _, _ -> }
     )
 
@@ -27,7 +27,17 @@ class AudioDatagramTest {
         assertTrue(parsed != null)
         assertEquals(AudioDatagram.TYPE_AUDIO, parsed!!.type)
         assertEquals("phone-1", parsed.senderId)
+        assertEquals(0, parsed.ack)
         assertTrue(parsed.payload.contentEquals(body))
+    }
+
+    @Test
+    fun `the answer travels with the hello`() {
+        val datagram = datagram()
+        val packet = datagram.build(AudioDatagram.TYPE_HELLO, ByteArray(0), 4321)!!
+        val parsed = datagram.parse(packet)!!
+        assertEquals(AudioDatagram.TYPE_HELLO, parsed.type)
+        assertEquals(4321, parsed.ack)
     }
 
     @Test

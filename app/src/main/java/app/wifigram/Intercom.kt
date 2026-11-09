@@ -109,6 +109,12 @@ class Intercom(
 
         /** How long the way over UDP is trusted after the last hello. */
         const val UDP_ALIVE_MS = 10_000L
+
+        /** How often the answer that the voice came goes back. */
+        const val ACK_EVERY_MS = 200L
+
+        /** How many pieces may wait for their answer before the way is doubted. */
+        const val UDP_LOST_FRAMES = 40
     }
 
     private val peerId: String = run {
@@ -163,6 +169,18 @@ class Intercom(
 
     /** When the last piece of the voice of every phone came. */
     private val lastVoiceArrival = ConcurrentHashMap<String, Long>()
+
+    /** The last piece of the voice that every phone sent us. */
+    private val udpReceived = ConcurrentHashMap<String, Int>()
+
+    /** The last piece of the voice that every phone says it has. */
+    private val udpAcknowledged = ConcurrentHashMap<String, Int>()
+
+    /** The last piece of the voice that we sent to every phone. */
+    private val udpSent = ConcurrentHashMap<String, Int>()
+
+    /** When the answer went to every phone the last time. */
+    private val ackSent = ConcurrentHashMap<String, Long>()
 
     private var audioDatagram: AudioDatagram? = null
     private val connecting = ConcurrentHashMap<String, Boolean>()
@@ -220,7 +238,7 @@ class Intercom(
         val datagram = AudioDatagram(
             localPeerId = peerId,
             scope = scope,
-            onHello = { id, address -> handleDatagramHello(id, address) },
+            onHello = { id, address, ack -> handleDatagramHello(id, address, ack) },
             onAudio = { audio, id, address -> handleDatagramAudio(audio, id, address) }
         )
         datagram.start()
@@ -261,6 +279,10 @@ class Intercom(
         peerAddresses.clear()
         udpAlive.clear()
         helloSent.clear()
+        udpReceived.clear()
+        udpAcknowledged.clear()
+        udpSent.clear()
+        ackSent.clear()
         links.values.forEach { link ->
             try { link.close() } catch (_: Exception) { }
         }
@@ -604,14 +626,15 @@ class Intercom(
      * The hello of the other phone came: the way over UDP is open, and the
      * answer says that it is open on our side too.
      */
-    private fun handleDatagramHello(remoteId: String, address: InetAddress) {
+    private fun handleDatagramHello(remoteId: String, address: InetAddress, ack: Int) {
         if (remoteId == peerId) return
         peerAddresses[remoteId] = address
         udpAlive[remoteId] = System.currentTimeMillis()
+        if (ack > (udpAcknowledged[remoteId] ?: -1)) udpAcknowledged[remoteId] = ack
         val last = helloSent[remoteId] ?: 0L
         if (System.currentTimeMillis() - last > HELLO_REPLY_AFTER_MS) {
             helloSent[remoteId] = System.currentTimeMillis()
-            audioDatagram?.sendHello(address)
+            audioDatagram?.sendHello(address, udpReceived[remoteId] ?: -1)
         }
     }
 
@@ -620,6 +643,16 @@ class Intercom(
         if (remoteId == peerId) return
         peerAddresses[remoteId] = address
         udpAlive[remoteId] = System.currentTimeMillis()
+        // The answer says that the piece came, so the phone that talks knows
+        // that the words arrive over UDP.
+        if (audio.sequence > (udpReceived[remoteId] ?: -1)) {
+            udpReceived[remoteId] = audio.sequence
+            val now = System.currentTimeMillis()
+            if (now - (ackSent[remoteId] ?: 0L) > ACK_EVERY_MS) {
+                ackSent[remoteId] = now
+                audioDatagram?.sendHello(address, audio.sequence)
+            }
+        }
         handleAudioFrame(remoteId, audio)
     }
 
@@ -632,7 +665,7 @@ class Intercom(
             val last = helloSent[id] ?: 0L
             if (now - last < HELLO_REPLY_AFTER_MS) return@forEach
             helloSent[id] = now
-            datagram.sendHello(address)
+            datagram.sendHello(address, udpReceived[id] ?: -1)
         }
     }
 
@@ -643,12 +676,20 @@ class Intercom(
      * recently; then a lost word costs one word and not the whole sentence.
      * When the hello is late, the piece goes the old way, over the stream.
      */
-    private fun sendVoice(remoteId: String, payload: ByteArray) {
+    private fun sendVoice(remoteId: String, payload: ByteArray, sequence: Int) {
         val address = peerAddresses[remoteId]
         if (address != null) {
             val last = udpAlive[remoteId] ?: 0L
-            if (System.currentTimeMillis() - last < UDP_ALIVE_MS) {
-                if (audioDatagram?.sendAudio(address, payload) == true) return
+            val sent = udpSent[remoteId] ?: -1
+            val ack = udpAcknowledged[remoteId] ?: -1
+            // The words that wait for their answer too long mean that the
+            // way is broken in one direction: the voice goes the old way.
+            val broken = sent >= 0 && sent - ack > UDP_LOST_FRAMES
+            if (System.currentTimeMillis() - last < UDP_ALIVE_MS && !broken) {
+                if (audioDatagram?.sendAudio(address, payload) == true) {
+                    udpSent[remoteId] = sequence
+                    return
+                }
             }
         }
         val voiceLink = audioLinks[remoteId]
@@ -709,7 +750,7 @@ class Intercom(
                 opus = audio.opus,
                 hops = audio.hops - 1
             )
-            sendVoice(other.remotePeerId, payload)
+            sendVoice(other.remotePeerId, payload, audio.sequence)
         }
     }
 
@@ -1107,7 +1148,7 @@ class Intercom(
                     direct = direct,
                     opus = OpusCodec.available
                 )
-                sendVoice(link.remotePeerId, payload)
+                sendVoice(link.remotePeerId, payload, sequence)
             }
         }
         voice = session
