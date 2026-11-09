@@ -60,7 +60,7 @@
     <string name="chat_you">Ви:</string>
     <string name="chat_sent">Надіслано</string>
     <string name="chat_delivered">Доставлено</string>
-    <string name="chat_queued">Чекає з'єднання</string>
+    <string name="chat_queued">Чекає з\'єднання</string>
 
     <!-- the station -->
     <string name="station_empty">Немає інших телефонів</string>
