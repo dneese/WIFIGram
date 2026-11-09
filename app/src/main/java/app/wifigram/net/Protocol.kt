@@ -57,6 +57,9 @@ object Protocol {
     const val TYPE_PING = 8
     const val TYPE_PONG = 9
 
+    /** The answer that a chat message has come. */
+    const val TYPE_MESSAGE_ACK = 10
+
     const val MAX_FRAME = 2 * 1024 * 1024
     const val CHUNK_SIZE = 64 * 1024
 
@@ -140,6 +143,12 @@ object Protocol {
         val timestamp = parts[1].toLongOrNull() ?: return null
         return ChatLine(parts[0], timestamp, parts[2])
     }
+
+    /** The answer to a chat line: only the id of the line that came. */
+    fun encodeChatAck(id: String): ByteArray = bytes(clean(id))
+
+    fun decodeChatAck(payload: ByteArray): String? =
+        text(payload).trim().ifBlank { null }
 
     // ── the files ──
 

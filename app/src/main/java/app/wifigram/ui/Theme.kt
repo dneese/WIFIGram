@@ -51,6 +51,31 @@ private val DarkColors = darkColorScheme(
 val CallGreen = Color(0xFF2E9E5B)
 val CallRed = Color(0xFFD93025)
 
+/** The colours of the words in the chat, as in Telegram. */
+data class ChatColors(
+    val mine: Color,
+    val mineText: Color,
+    val theirs: Color,
+    val theirsText: Color
+)
+
+@Composable
+fun chatColors(): ChatColors = if (isSystemInDarkTheme()) {
+    ChatColors(
+        mine = Color(0xFF2B5278),
+        mineText = Color(0xFFE9F1FA),
+        theirs = Color(0xFF1C2430),
+        theirsText = Color(0xFFE4E8EE)
+    )
+} else {
+    ChatColors(
+        mine = Color(0xFFDCF0FF),
+        mineText = Color(0xFF111418),
+        theirs = Color(0xFFFFFFFF),
+        theirsText = Color(0xFF111418)
+    )
+}
+
 @Composable
 fun WifigramTheme(content: @Composable () -> Unit) {
     MaterialTheme(

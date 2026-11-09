@@ -32,6 +32,7 @@ class PeerLink(
     sealed class Event {
         data class Hello(val peerId: String, val name: String) : Event()
         data class Chat(val line: Protocol.ChatLine) : Event()
+        data class ChatAck(val id: String) : Event()
         data class FileMeta(val meta: Protocol.FileMeta) : Event()
         data class FileChunk(val chunk: Protocol.FileChunk) : Event()
         data class Call(val signal: Protocol.CallSignal) : Event()
@@ -125,6 +126,10 @@ class PeerLink(
                 Protocol.TYPE_MESSAGE -> {
                     val line = Protocol.decodeChat(frame.payload)
                     if (line != null) onEvent(this@PeerLink, Event.Chat(line))
+                }
+                Protocol.TYPE_MESSAGE_ACK -> {
+                    val id = Protocol.decodeChatAck(frame.payload)
+                    if (id != null) onEvent(this@PeerLink, Event.ChatAck(id))
                 }
                 Protocol.TYPE_FILE_META -> {
                     val meta = Protocol.decodeFileMeta(frame.payload)

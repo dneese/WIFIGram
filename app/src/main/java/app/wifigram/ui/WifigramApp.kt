@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -37,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +55,7 @@ import app.wifigram.IntercomService
 import app.wifigram.ProfileStore
 import app.wifigram.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The whole app: the station, the chats and the calls.
@@ -71,6 +76,9 @@ fun WifigramApp() {
     var settingsDialog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf(CallLogStore.list(context)) }
     var missed by remember { mutableIntStateOf(CallLogStore.missedCount(context)) }
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val offlineText = stringResource(R.string.calls_offline)
 
     // The station lives in the background, so a call is heard with a closed screen
     LaunchedEffect(Unit) {
@@ -83,7 +91,9 @@ fun WifigramApp() {
     }
 
     val peerName = chatPeer?.let { id ->
-        peers.firstOrNull { it.id == id }?.name ?: stringResource(R.string.phone_fallback)
+        peers.firstOrNull { it.id == id }?.name
+            ?: conversations.firstOrNull { it.peerId == id }?.peerName
+            ?: stringResource(R.string.phone_fallback)
     } ?: stringResource(R.string.phone_fallback)
 
     var pendingCall by remember { mutableStateOf<String?>(null) }
@@ -118,6 +128,16 @@ fun WifigramApp() {
         }
     }
 
+    val callFromLog: (CallLogStore.Entry) -> Unit = { entry ->
+        val id = entry.peerId
+            ?: peers.firstOrNull { it.online && it.name == entry.name }?.id
+        if (id != null && peers.any { it.id == id && it.online }) {
+            startCall(id)
+        } else {
+            scope.launch { snackbar.showSnackbar(offlineText) }
+        }
+    }
+
     BackHandler(enabled = chatPeer != null) {
         chatPeer = null
     }
@@ -125,7 +145,7 @@ fun WifigramApp() {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
-                TopAppBar(
+                if (chatPeer == null) TopAppBar(
                     title = {
                         Column {
                             Text(
@@ -170,8 +190,9 @@ fun WifigramApp() {
                     )
                 )
             },
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                NavigationBar {
+                if (chatPeer == null) NavigationBar {
                     NavigationBarItem(
                         selected = tab == 0,
                         onClick = { tab = 0 },
@@ -203,6 +224,7 @@ fun WifigramApp() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .consumeWindowInsets(padding)
             ) {
                 when (tab) {
                     0 -> CallsScreen(
@@ -211,7 +233,8 @@ fun WifigramApp() {
                             CallLogStore.clear(context)
                             log = emptyList()
                             missed = 0
-                        }
+                        },
+                        onCall = callFromLog
                     )
 
                     1 -> StationScreen(
@@ -225,11 +248,13 @@ fun WifigramApp() {
 
                     else -> ChatsScreen(
                         conversations = conversations,
+                        peers = peers,
                         onOpen = { id -> chatPeer = id }
                     )
                 }
 
-                if (chatPeer != null) {
+                val openPeer = chatPeer
+                if (openPeer != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -237,10 +262,12 @@ fun WifigramApp() {
                     ) {
                         ChatScreen(
                             engine = engine,
-                            peerId = chatPeer!!,
+                            peerId = openPeer,
                             peerName = peerName,
+                            peer = peers.firstOrNull { it.id == openPeer },
                             onBack = { chatPeer = null },
-                            onPickFile = { filePicker.launch(arrayOf("*/*")) }
+                            onPickFile = { filePicker.launch(arrayOf("*/*")) },
+                            onCall = { startCall(openPeer) }
                         )
                     }
                 }

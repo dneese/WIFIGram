@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.0
+
+The conversation looks like the one in Telegram, and the journal calls back.
+
+- **The chat looks alive**: the words sit in round bubbles — the own ones blue, the other ones white, with a tail towards the sender; the days are separated by a chip (today, yesterday, the date); the words of one person that follow each other are put closer together.
+- **The two ticks**: one tick says that the message left, two ticks say that the other phone has it. The phone answers every message at once, so the sender knows that the words came. A clock means that there was no connection and the message waits.
+- **The history stays**: the conversation is kept in the phone, so the words of yesterday are still there after the program was closed. Two hundred last messages of every phone.
+- **The unread are counted**: the list of the conversations shows how many messages came and were not read; the name turns bold and the badge appears.
+- **The field of the message is a pill**: the paperclip is inside it, the round button sends the message; long press on a message copies the words; a button brings the conversation down.
+- **The head of the chat calls**: the handset in the head of the conversation calls the same phone.
+- **The journal calls back**: every line of the journal now remembers the phone, and the green handset in the line calls it at once. If the phone is not on the station, the program says so.
+- **The list of the conversations shows who is online** and the time of the last message in the way of the day.
+
 ## v0.5.0
 
 The phone speaks your language, and the voice does not wait for the lost words.

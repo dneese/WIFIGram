@@ -60,7 +60,11 @@ class Intercom(
         val mine: Boolean,
         val fileName: String? = null,
         val filePath: String? = null,
-        val fileSize: Long = 0L
+        val fileSize: Long = 0L,
+        /** The other phone has said that the message came. */
+        val delivered: Boolean = false,
+        /** There was no connection, so the message waits for a new one. */
+        val queued: Boolean = false
     )
 
     data class Conversation(
@@ -189,6 +193,9 @@ class Intercom(
     private val lastPlayed = ConcurrentHashMap<String, Int>()
     private val incomingFiles = ConcurrentHashMap<Long, IncomingFile>()
 
+    /** Until what moment every conversation was read. */
+    private var lastRead: Map<String, Long> = emptyMap()
+
     private class IncomingFile(
         val meta: Protocol.FileMeta,
         val file: File,
@@ -206,6 +213,13 @@ class Intercom(
     private var callStartedAt = 0L
     private var signalLostAt = 0L
     private var audioSequence = 0
+
+    init {
+        // The words of the old conversations are still here after a restart.
+        _messages.value = ChatStore.load(context)
+        lastRead = ChatStore.lastRead(context)
+        refreshConversations()
+    }
 
     // ── the life of the station ──
 
@@ -457,6 +471,8 @@ class Intercom(
                         lastSeen = System.currentTimeMillis()
                     )
                     refreshPeers()
+                    // The messages that waited for this phone go now.
+                    resendQueued(remoteId, link)
                     // A call that was interrupted by the lost WiFi continues
                     // when the phones see each other again.
                     resumeCallIfNeeded(remoteId)
@@ -468,6 +484,9 @@ class Intercom(
             is PeerLink.Event.Chat -> {
                 val remoteId = link.remotePeerId
                 if (remoteId.isBlank()) return
+                // The answer says that the message came, so the sender shows
+                // the second tick. A repeated message gets its answer too.
+                link.send(Protocol.TYPE_MESSAGE_ACK, Protocol.encodeChatAck(event.line.id))
                 if (seenMessages.putIfAbsent(event.line.id, true) != null) return
                 val peerName = known[remoteId]?.name ?: defaultName()
                 appendMessage(
@@ -480,6 +499,25 @@ class Intercom(
                         mine = false
                     )
                 )
+            }
+
+            is PeerLink.Event.ChatAck -> {
+                val remoteId = link.remotePeerId
+                if (remoteId.isBlank()) return
+                val list = _messages.value[remoteId] ?: return
+                var changed = false
+                val updated = list.map { message ->
+                    if (message.mine && message.id == event.id && !message.delivered) {
+                        changed = true
+                        message.copy(delivered = true, queued = false)
+                    } else {
+                        message
+                    }
+                }
+                if (changed) {
+                    _messages.value = _messages.value + (remoteId to updated)
+                    saveChat()
+                }
             }
 
             is PeerLink.Event.FileMeta -> {
@@ -763,6 +801,43 @@ class Intercom(
         }
         val list = (_messages.value[message.peerId] ?: emptyList()) + message
         _messages.value = _messages.value + (message.peerId to list.takeLast(200))
+        saveChat()
+        refreshConversations()
+    }
+
+    /** Keeps the conversation in the settings of the phone. */
+    private fun saveChat() {
+        ChatStore.save(context, _messages.value)
+    }
+
+    /** Sends the words that were waiting for the connection. */
+    private fun resendQueued(remoteId: String, link: PeerLink) {
+        val list = _messages.value[remoteId] ?: return
+        if (list.none { it.queued }) return
+        val updated = list.map { message ->
+            if (message.queued && message.fileName == null) {
+                link.send(
+                    Protocol.TYPE_MESSAGE,
+                    Protocol.encodeChat(
+                        Protocol.ChatLine(message.id, message.timestamp, message.text)
+                    )
+                )
+                message.copy(queued = false)
+            } else {
+                message
+            }
+        }
+        _messages.value = _messages.value + (remoteId to updated)
+        saveChat()
+    }
+
+    /** Says that the conversation with this phone has been read. */
+    fun markRead(peerId: String) {
+        val last = _messages.value[peerId]?.lastOrNull { !it.mine }?.timestamp ?: return
+        if (last <= (lastRead[peerId] ?: 0L)) return
+        val now = System.currentTimeMillis()
+        lastRead = lastRead + (peerId to now)
+        ChatStore.markRead(context, peerId, now)
         refreshConversations()
     }
 
@@ -774,7 +849,7 @@ class Intercom(
                 peerId = peerId,
                 peerName = peers[peerId]?.name ?: last.peerName,
                 last = last,
-                unread = if (last.mine) 0 else 1
+                unread = messages.count { !it.mine && it.timestamp > (lastRead[peerId] ?: 0L) }
             )
         }.sortedByDescending { it.last?.timestamp ?: 0L }
         _conversations.value = list
@@ -787,7 +862,8 @@ class Intercom(
             timestamp = System.currentTimeMillis(),
             text = text.trim()
         )
-        links[peerId]?.send(Protocol.TYPE_MESSAGE, Protocol.encodeChat(line))
+        val link = links[peerId]
+        link?.send(Protocol.TYPE_MESSAGE, Protocol.encodeChat(line))
         appendMessage(
             ChatMessage(
                 id = line.id,
@@ -795,7 +871,8 @@ class Intercom(
                 peerName = known[peerId]?.name ?: defaultName(),
                 text = line.text,
                 timestamp = line.timestamp,
-                mine = true
+                mine = true,
+                queued = link == null
             )
         )
     }
@@ -1113,13 +1190,15 @@ class Intercom(
         if (rememberMissed && call != null) {
             CallLogStore.add(
                 context, call.peerName, outgoing, missed = true,
-                dropped = quality.first, concealed = quality.second
+                dropped = quality.first, concealed = quality.second,
+                peerId = call.peerId
             )
             _missed.value = _missed.value + 1
         } else if (call != null && call.phase == Phase.ACTIVE) {
             CallLogStore.add(
                 context, call.peerName, outgoing, missed = false,
-                dropped = quality.first, concealed = quality.second
+                dropped = quality.first, concealed = quality.second,
+                peerId = call.peerId
             )
         }
     }
