@@ -33,6 +33,7 @@ import app.wifigram.R
 @Composable
 fun NameDialog(initial: String, onSave: (String) -> Unit) {
     var name by remember { mutableStateOf(initial) }
+    val fallback = stringResource(R.string.phone_fallback)
     AlertDialog(
         onDismissRequest = { },
         title = { Text(stringResource(R.string.name_title)) },
@@ -52,7 +53,7 @@ fun NameDialog(initial: String, onSave: (String) -> Unit) {
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim().ifEmpty { stringResource(R.string.phone_fallback) }) },
+                onClick = { onSave(name.trim().ifEmpty { fallback }) },
                 enabled = name.isNotBlank()
             ) {
                 Text(stringResource(R.string.ready))
