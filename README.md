@@ -20,9 +20,13 @@ each other by themselves.
 - **The stable connection** — when the phones go out of reach, the call is not
   closed: the phone beeps quietly, waits and continues by itself when the
   signal is back.
-- **The messages and the files** — one phone at a time, like the messages and
-  the pictures of a usual phone.
-- **The journal of the calls** — who called, who did not answer.
+- **The messages and the files** — a chat with the look of Telegram: round
+  bubbles, the days separated, the ticks of delivery, the history that stays
+  after a restart. Long press copies a message; the paperclip sends a file.
+- **The unread** — the list of the conversations shows what came and was not
+  read, with the badge and the bold name.
+- **The journal of the calls** — who called, who did not answer, and the green
+  handset that calls the same phone back with one touch.
 - **Two languages** — Ukrainian or English, chosen in the settings. The choice
   belongs to the phone and stays there.
 - **WiFi Direct** — two phones talk directly, without a router. It is the mode
@@ -55,7 +59,7 @@ The project is built on GitHub Actions. The release workflow builds the
 signed APKs for arm64, x86_64 and for every architecture at once:
 
 ```
-bash scripts/release.sh v0.5.0
+bash scripts/release.sh v0.6.0
 ```
 
 The tag starts the workflow, it builds the APKs and publishes them on the
