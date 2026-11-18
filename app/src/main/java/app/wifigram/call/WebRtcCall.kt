@@ -316,7 +316,7 @@ class WebRtcCall(
         override fun onTrack(transceiver: RtpTransceiver) = Unit
     }
 
-    private abstract class SimpleSdpObserver : SdpObserver {
+    private inner abstract class SimpleSdpObserver : SdpObserver {
         protected var createdDescription: SessionDescription? = null
 
         override fun onCreateSuccess(description: SessionDescription) {

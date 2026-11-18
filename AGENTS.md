@@ -29,9 +29,10 @@ gh run view <run-id> --log-failed
 
 ## Код
 
-- Kotlin, без сторонніх бібліотек, окрім Compose та AndroidX. Коментарі в коді — англійською, рядки для користувача — українською.
+- Kotlin. Сторонні бібліотеки: Compose, AndroidX і libwebrtc (`io.github.webrtc-sdk:android`) для дзвінків. Коментарі в коді — англійською, рядки для користувача — українською.
 - Налаштування — у `ProfileStore` (SharedPreferences). Мова програми — теж там (`Locales`).
-- Звук дзвінка — `CallSession`, буфер — `call/PlayoutBuffer.kt` ( cushions follows the measured jitter), кодек — `call/OpusCodec.kt`, шум і ехо — `call/VoiceEffects.kt`.
-- Голос іде по UDP (`net/AudioDatagram.kt`, порт 45314) з fallback на TCP (`net/AudioLink.kt`) і підтвердженням прийому (ack).
+- Голос дзвінка іде через WebRTC (`call/WebRtcCall.kt`): DTLS-SRTP, вбудований Opus, AEC/NS/AGC, ICE тільки по локальній мережі.
+- Сигналізація WebRTC (`offer`/`answer`/`ICE candidate`) ходить наявним TCP-каналом (`net/Protocol.kt`, тип `TYPE_RTC`).
+- Старий ручний голосовий шлях (`call/CallSession.kt`, `net/AudioDatagram.kt`) лишився в коді як запасний шар і вже не використовується `Intercom`.
 - Рядки — у `res/values/strings.xml` (укр) і `res/values-en/strings.xml` (англ); неhardcode-ити текст у Kotlin.
 - Release-збірка ввімкнена з R8 (`isMinifyEnabled`), тому JNI-класи треба тримати в `app/proguard-rules.pro`.
