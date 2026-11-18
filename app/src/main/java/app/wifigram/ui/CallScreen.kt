@@ -12,15 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SignalWifi0
-import androidx.compose.material.icons.filled.SignalWifi1
-import androidx.compose.material.icons.filled.SignalWifi2
-import androidx.compose.material.icons.filled.SignalWifi3
-import androidx.compose.material.icons.filled.SignalWifi4
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
@@ -271,22 +268,13 @@ private fun QualityRow(quality: Intercom.Quality) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        val icon = when (quality.bars) {
-            4 -> Icons.Filled.SignalWifi4
-            3 -> Icons.Filled.SignalWifi3
-            2 -> Icons.Filled.SignalWifi2
-            1 -> Icons.Filled.SignalWifi1
-            else -> Icons.Filled.SignalWifi0
-        }
-        Icon(
-            imageVector = icon,
-            contentDescription = stringResource(R.string.call_quality),
-            tint = when (quality.bars) {
+        SignalBars(
+            bars = quality.bars,
+            color = when (quality.bars) {
                 4, 3 -> CallGreen
                 2 -> MaterialTheme.colorScheme.tertiary
                 else -> CallRed
-            },
-            modifier = Modifier.size(18.dp)
+            }
         )
         Text(
             text = stringResource(
@@ -298,6 +286,28 @@ private fun QualityRow(quality: Intercom.Quality) {
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/** The bars of the way: four of them, the filled ones are the strength. */
+@Composable
+private fun SignalBars(bars: Int, color: Color) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        val heights = listOf(5.dp, 9.dp, 13.dp, 17.dp)
+        heights.forEachIndexed { index, height ->
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(height)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(
+                        if (index < bars) color else MaterialTheme.colorScheme.outlineVariant
+                    )
+            )
+        }
     }
 }
 
