@@ -1,10 +1,9 @@
 package app.wifigram
 
 import android.content.Context
-import android.media.AudioManager
 import android.net.Uri
+import app.wifigram.call.CallSession
 import app.wifigram.call.OpusCodec
-import app.wifigram.call.WebRtcCall
 import app.wifigram.net.AudioDatagram
 import app.wifigram.net.AudioLink
 import app.wifigram.net.DirectBridge
@@ -92,7 +91,20 @@ class Intercom(
         val startedAt: Long,
         val muted: Boolean = false,
         val speaker: Boolean = false,
-        val signalLost: Boolean = false
+        val signalLost: Boolean = false,
+        val quality: Quality = Quality()
+    )
+
+    /**
+     * The state of the connection during a call: how far the words of the
+     * other phone go, how steady they are and how many of them are lost.
+     */
+    data class Quality(
+        val rttMs: Int = -1,
+        val jitterMs: Int = 0,
+        val lossPercent: Int = 0,
+        val bars: Int = 0,
+        val transport: String = Settings.TRANSPORT_AUTO
     )
 
     companion object {
@@ -209,7 +221,7 @@ class Intercom(
     private var audioAcceptJob: Job? = null
     private var discovery: Discovery? = null
     private var directBridge: DirectBridge? = null
-    private val rtcCalls = ConcurrentHashMap<String, WebRtcCall>()
+    private var voice: CallSession? = null
     private var running = false
     private var callStartedAt = 0L
     private var signalLostAt = 0L
@@ -260,7 +272,7 @@ class Intercom(
         audioDatagram = datagram
         scope.launch(Dispatchers.IO) {
             while (running) {
-                delay(HELLO_EVERY_MS)
+                delay(ProfileStore.settings(context).helloIntervalMs.toLong())
                 sendDatagramHellos()
             }
         }
@@ -567,10 +579,6 @@ class Intercom(
                 handleCallSignal(link, event.signal)
             }
 
-            is PeerLink.Event.Rtc -> {
-                handleRtcSignal(link.remotePeerId, event.signal)
-            }
-
             is PeerLink.Event.Audio -> {
                 // A phone whose voice connection is not up yet sends the
                 // sound on the usual connection.
@@ -691,7 +699,7 @@ class Intercom(
         if (audio.sequence > (udpReceived[remoteId] ?: -1)) {
             udpReceived[remoteId] = audio.sequence
             val now = System.currentTimeMillis()
-            if (now - (ackSent[remoteId] ?: 0L) > ACK_EVERY_MS) {
+            if (now - (ackSent[remoteId] ?: 0L) > ProfileStore.settings(context).ackIntervalMs) {
                 ackSent[remoteId] = now
                 audioDatagram?.sendHello(address, audio.sequence)
             }
@@ -720,8 +728,15 @@ class Intercom(
      * When the hello is late, the piece goes the old way, over the stream.
      */
     private fun sendVoice(remoteId: String, payload: ByteArray, sequence: Int) {
+        val transport = ProfileStore.settings(context).transport
+        if (transport == Settings.TRANSPORT_TCP) {
+            val voiceLink = audioLinks[remoteId]
+            if (voiceLink != null) voiceLink.sendAudio(payload)
+            else links[remoteId]?.send(Protocol.TYPE_AUDIO, payload)
+            return
+        }
         val address = peerAddresses[remoteId]
-        if (address != null) {
+        if (address != null && transport != Settings.TRANSPORT_UDP) {
             val last = udpAlive[remoteId] ?: 0L
             val sent = udpSent[remoteId] ?: -1
             val ack = udpAcknowledged[remoteId] ?: -1
@@ -752,6 +767,7 @@ class Intercom(
             val last = lastPlayed[audio.senderId]
             if (last == null || audio.sequence > last) {
                 lastPlayed[audio.senderId] = audio.sequence
+                voice?.play(audio.data, audio.opus)
             }
         } else if (audio.hops > 1) {
             // This phone is only a relay, the sound goes further
@@ -957,6 +973,7 @@ class Intercom(
             Protocol.TYPE_CALL,
             Protocol.encodeCall(Protocol.CallSignal(Protocol.CALL_INVITE, callId, localName, ""))
         )
+        startVoice()
         return true
     }
 
@@ -971,7 +988,7 @@ class Intercom(
             Protocol.TYPE_CALL,
             Protocol.encodeCall(Protocol.CallSignal(Protocol.CALL_ACCEPT, call.callId, localName, ""))
         )
-        startVoice(initiator = false)
+        startVoice()
     }
 
     /** Rejects the incoming call. */
@@ -1034,14 +1051,14 @@ class Intercom(
         val call = _call.value ?: return
         val muted = !call.muted
         _call.value = call.copy(muted = muted)
-        rtcCalls.values.forEach { it.setMuted(muted) }
+        voice?.setMuted(muted)
     }
 
     fun toggleSpeaker() {
         val call = _call.value ?: return
         val speaker = !call.speaker
         _call.value = call.copy(speaker = speaker)
-        rtcCalls.values.forEach { it.setSpeaker(speaker) }
+        voice?.setSpeaker(speaker)
     }
 
     private fun handleCallSignal(link: PeerLink, signal: Protocol.CallSignal) {
@@ -1065,6 +1082,7 @@ class Intercom(
                         )
                     }
                 } else if (current == null || current.phase == Phase.INCOMING) {
+                    if (ProfileStore.settings(context).incomingSound) MessageSound.play()
                     _call.value = Call(
                         callId = signal.callId,
                         phase = Phase.INCOMING,
@@ -1083,7 +1101,7 @@ class Intercom(
                 if (call.callId != signal.callId) return
                 _call.value = call.copy(phase = Phase.ACTIVE, startedAt = System.currentTimeMillis())
                 callStartedAt = System.currentTimeMillis()
-                startVoice(initiator = true)
+                startVoice()
             }
 
             Protocol.CALL_REJECT -> {
@@ -1123,7 +1141,7 @@ class Intercom(
                         startedAt = System.currentTimeMillis()
                     )
                     callStartedAt = System.currentTimeMillis()
-                    startVoice(initiator = false)
+                    startVoice()
                     link.send(
                         Protocol.TYPE_CALL,
                         Protocol.encodeCall(
@@ -1144,7 +1162,7 @@ class Intercom(
                 if (call.phase != Phase.ACTIVE) return
                 _call.value = call.copy(signalLost = false)
                 signalLostAt = 0L
-                // The WebRTC state reports the restored connection.
+                voice?.setSignalLost(false)
             }
         }
     }
@@ -1168,6 +1186,7 @@ class Intercom(
         )
         _call.value = call.copy(signalLost = false)
         signalLostAt = 0L
+        voice?.setSignalLost(false)
     }
 
     /** The phone went out of reach, the call waits for it. */
@@ -1178,7 +1197,7 @@ class Intercom(
         if (!call.signalLost) {
             signalLostAt = System.currentTimeMillis()
             _call.value = call.copy(signalLost = true)
-            // The WebRTC state reports the lost connection.
+            voice?.setSignalLost(true)
         }
     }
 
@@ -1205,75 +1224,52 @@ class Intercom(
         }
     }
 
-    private fun startVoice(initiator: Boolean) {
-        val call = _call.value ?: return
-        val remoteId = call.peerId
-        if (rtcCalls.containsKey(remoteId)) return
-        val session = WebRtcCall(
-            context = context,
-            callId = call.callId,
-            onSignal = { signal ->
-                links[remoteId]?.send(Protocol.TYPE_RTC, Protocol.encodeRtcSignal(signal))
-            },
-            onConnectionChanged = { connected ->
-                scope.launch { updateRtcConnection(remoteId, connected) }
-            },
-            onError = { message ->
-                showVoiceError(message)
+    private fun startVoice() {
+        if (voice != null) return
+        // A new call: the words of the old one are not remembered.
+        lastPlayed.clear()
+        val seed = _call.value?.let { jitterSeedMs(it) } ?: 0.0
+        val tuning = ProfileStore.settings(context)
+        val session = CallSession(context, scope, seed, tuning) { frame ->
+            val call = _call.value ?: return@CallSession
+            // The list of the phones of the conversation, the sender is in it
+            val members = call.participants.map { it.id } + peerId
+            val sequence = audioSequence++
+            // The phone remembers its own last word, so a copy of it that
+            // comes back the long way around is thrown away.
+            lastPlayed[peerId] = sequence
+            links.values.forEach { link ->
+                val direct = members.contains(link.remotePeerId)
+                val payload = Protocol.encodeAudio(
+                    callId = call.callId,
+                    senderId = peerId,
+                    members = members,
+                    sequence = sequence,
+                    data = frame,
+                    direct = direct,
+                    opus = tuning.opus && OpusCodec.available
+                )
+                sendVoice(link.remotePeerId, payload, sequence)
             }
-        )
-        rtcCalls[remoteId] = session
-        session.setSpeaker(call.speaker)
-        session.setMuted(call.muted)
-        session.start(initiator)
-    }
-
-    private fun handleRtcSignal(remoteId: String, signal: Protocol.RtcSignal) {
-        val call = _call.value ?: return
-        if (call.callId != signal.callId) return
-        if (!call.participants.any { it.id == remoteId }) return
-        val session = rtcCalls[remoteId] ?: run {
-            startVoice(initiator = false)
-            rtcCalls[remoteId]
-        } ?: return
-        when (signal.kind) {
-            Protocol.RTC_OFFER -> session.handleOffer(signal.payload)
-            Protocol.RTC_ANSWER -> session.handleAnswer(signal.payload)
-            Protocol.RTC_CANDIDATE -> session.handleCandidate(signal.payload)
         }
-    }
-
-    private fun showVoiceError(message: String) {
-        android.util.Log.e("WifigramVoice", message)
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun updateRtcConnection(remoteId: String, connected: Boolean) {
-        val call = _call.value ?: return
-        if (call.peerId != remoteId || call.phase != Phase.ACTIVE) return
-        if (connected) {
-            if (call.signalLost) {
-                _call.value = call.copy(signalLost = false)
-                signalLostAt = 0L
-            }
-        } else if (!call.signalLost) {
-            signalLostAt = System.currentTimeMillis()
-            _call.value = call.copy(signalLost = true)
+        voice = session
+        session.start()
+        // The phone may begin with the speaker of the phone, if the settings
+        // of the user say so.
+        val call = _call.value
+        if (call != null && tuning.speakerDefault && !call.speaker) {
+            _call.value = call.copy(speaker = true)
+            session.setSpeaker(true)
         }
     }
 
     private fun stopVoice(): Pair<Int, Int> {
-        rtcCalls.values.forEach { session ->
-            try { session.close() } catch (_: Exception) { }
-        }
-        rtcCalls.clear()
-        try {
-            val manager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            manager?.mode = AudioManager.MODE_NORMAL
-        } catch (_: Exception) { }
-        return 0 to 0
+        val session = voice
+        val dropped = try { session?.droppedFrames ?: 0 } catch (_: Exception) { 0 }
+        val concealed = try { session?.concealedFrames ?: 0 } catch (_: Exception) { 0 }
+        try { voice?.stop() } catch (_: Exception) { }
+        voice = null
+        return dropped to concealed
     }
 
     // ── the timer of the lost signal ──
@@ -1287,6 +1283,12 @@ class Intercom(
         }
         scope.launch(Dispatchers.Default) {
             while (true) {
+                delay(2000)
+                updateQuality()
+            }
+        }
+        scope.launch(Dispatchers.Default) {
+            while (true) {
                 delay(1000)
                 val call = _call.value ?: continue
                 if (call.phase != Phase.ACTIVE || !call.signalLost) continue
@@ -1296,6 +1298,35 @@ class Intercom(
                 }
             }
         }
+    }
+
+    /**
+     * Reads the state of the connection and puts it into the call, so the
+     * screen can show how good the way is.
+     */
+    private fun updateQuality() {
+        val call = _call.value ?: return
+        if (call.phase != Phase.ACTIVE) return
+        val remoteId = call.peerId
+        val tuning = ProfileStore.settings(context)
+        val rtt = links[remoteId]?.rttMs ?: -1
+        val jitter = (peerJitter[remoteId] ?: 0.0).toInt()
+        val sent = udpSent[remoteId] ?: -1
+        val acknowledged = udpAcknowledged[remoteId] ?: -1
+        val lost = if (sent > 0 && acknowledged >= 0) {
+            ((sent - acknowledged) * 100 / sent).coerceIn(0, 100)
+        } else {
+            0
+        }
+        val bars = when {
+            rtt < 0 -> 1
+            lost > 10 || rtt > 400 -> 1
+            lost > 4 || rtt > 250 -> 2
+            lost > 1 || rtt > 120 -> 3
+            else -> 4
+        }
+        val quality = Quality(rtt, jitter, lost, bars, tuning.transport)
+        if (call.quality != quality) _call.value = call.copy(quality = quality)
     }
 
     /** A phone that has not said anything for a long time leaves the station. */

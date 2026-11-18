@@ -8,6 +8,7 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import app.wifigram.ProfileStore
+import app.wifigram.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,6 +36,7 @@ class CallSession(
     private val context: Context,
     private val scope: CoroutineScope,
     private val jitterSeedMs: Double = 0.0,
+    private val settings: Settings = Settings(),
     private val onFrame: (ByteArray) -> Unit
 ) {
 
@@ -63,7 +65,9 @@ class CallSession(
     private var effects: VoiceEffects? = null
     private var captureJob: Job? = null
     private var playoutJob: Job? = null
-    private val playout = PlayoutBuffer(seedJitterMs = jitterSeedMs)
+    private val playout = PlayoutBuffer(
+        seedJitterMs = maxOf(jitterSeedMs, settings.jitterMs.toDouble())
+    )
     private val silence = ByteArray(FRAME_BYTES)
 
     @Volatile
@@ -78,6 +82,15 @@ class CallSession(
     /** The state of the noise catcher of the phone right now. */
     @Volatile
     private var noiseOn = true
+
+    @Volatile
+    private var echoOn = true
+
+    @Volatile
+    private var gainOn = false
+
+    @Volatile
+    private var opusOn = true
 
     @Volatile
     var running: Boolean = false
@@ -100,8 +113,8 @@ class CallSession(
     /** The sound goes to the speaker of the phone or to the earpiece. */
     fun setSpeaker(value: Boolean) {
         speaker = value
-        // The echo of the speaker is only a problem when the speaker is on.
-        effects?.setEcho(value)
+        // The echo of the speaker is taken away as long as the setting says so.
+        effects?.setEcho(echoOn)
         applyMode()
         applyRoute()
     }
@@ -189,9 +202,18 @@ class CallSession(
         // The helpers of the phone: the hum and the echo.
         val voiceEffects = VoiceEffects(audioRecord)
         effects = voiceEffects
-        noiseOn = ProfileStore.denoise(context)
+        val wanted = currentSettings()
+        noiseOn = wanted.noiseSuppress
+        echoOn = wanted.echoCancel
+        gainOn = wanted.autoGain
+        opusOn = wanted.opus
         voiceEffects.setNoise(noiseOn)
-        voiceEffects.setEcho(speaker)
+        voiceEffects.setEcho(echoOn)
+        voiceEffects.setGain(gainOn)
+        try {
+            audioTrack.setVolume(wanted.voiceVolume.coerceIn(0, 100) / 100f)
+        } catch (_: Exception) {
+        }
 
         // The mode first, the route second: changing the mode resets the
         // route, and the phone would quietly forget the speaker.
@@ -235,13 +257,17 @@ class CallSession(
     /** Plays the sound that came from the other phone. */
     fun play(data: ByteArray, opus: Boolean) {
         if (!running) return
-        val pcm = if (opus) {
+        val useOpus = opus && opusOn
+        val pcm = if (useOpus) {
             OpusCodec.decode(data) ?: return
         } else {
             data
         }
         playout.enqueue(pcm, System.currentTimeMillis())
     }
+
+    /** The tuning of the phone at this very moment. */
+    private fun currentSettings(): Settings = ProfileStore.settings(context)
 
     private fun captureLoop(audioRecord: AudioRecord) {
         // The microphone does not always give a whole frame at a time, so
@@ -251,6 +277,7 @@ class CallSession(
         val piece = ByteArray(FRAME_BYTES)
         val frame = ByteArray(FRAME_BYTES)
         var filled = 0
+        var sinceCheck = 0
         while (running && scope.isActive) {
             val read = try {
                 audioRecord.read(piece, 0, piece.size)
@@ -263,11 +290,29 @@ class CallSession(
                 filled = 0
                 continue
             }
-            // The settings may turn the noise catcher while the call goes on.
-            val wanted = ProfileStore.denoise(context)
-            if (wanted != noiseOn) {
-                noiseOn = wanted
-                effects?.setNoise(wanted)
+            // The settings may change while the call goes on. They are
+            // looked at twice a second, not twenty times.
+            sinceCheck++
+            if (sinceCheck >= 25) {
+                sinceCheck = 0
+                val wanted = currentSettings()
+                if (wanted.noiseSuppress != noiseOn) {
+                    noiseOn = wanted.noiseSuppress
+                    effects?.setNoise(noiseOn)
+                }
+                if (wanted.echoCancel != echoOn) {
+                    echoOn = wanted.echoCancel
+                    effects?.setEcho(echoOn)
+                }
+                if (wanted.autoGain != gainOn) {
+                    gainOn = wanted.autoGain
+                    effects?.setGain(gainOn)
+                }
+                opusOn = wanted.opus
+                try {
+                    track?.setVolume(wanted.voiceVolume.coerceIn(0, 100) / 100f)
+                } catch (_: Exception) {
+                }
             }
             var offset = 0
             while (offset < read) {
@@ -277,7 +322,7 @@ class CallSession(
                 offset += take
                 if (filled < FRAME_BYTES) break
                 filled = 0
-                if (OpusCodec.available) {
+                if (opusOn && OpusCodec.available) {
                     val coded = OpusCodec.encode(frame) ?: continue
                     onFrame(coded)
                 } else {

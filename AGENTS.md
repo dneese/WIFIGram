@@ -31,8 +31,8 @@ gh run view <run-id> --log-failed
 
 - Kotlin. Сторонні бібліотеки: Compose, AndroidX і libwebrtc (`io.github.webrtc-sdk:android`) для дзвінків. Коментарі в коді — англійською, рядки для користувача — українською.
 - Налаштування — у `ProfileStore` (SharedPreferences). Мова програми — теж там (`Locales`).
-- Голос дзвінка іде через WebRTC (`call/WebRtcCall.kt`): DTLS-SRTP, вбудований Opus, AEC/NS/AGC, ICE тільки по локальній мережі.
-- Сигналізація WebRTC (`offer`/`answer`/`ICE candidate`) ходить наявним TCP-каналом (`net/Protocol.kt`, тип `TYPE_RTC`).
-- Старий ручний голосовий шлях (`call/CallSession.kt`, `net/AudioDatagram.kt`) лишився в коді як запасний шар і вже не використовується `Intercom`.
+- Голос дзвінка іде через `call/CallSession.kt`: мікрофон 16 кГц, Opus, буфер згладжування, AEC/NS/AGC з `call/VoiceEffects.kt`.
+- Налаштування голосу, звуку і зв'язку — `Settings.kt` + `ProfileStore.settings()`, UI — `ui/Dialogs.kt` (`TuningDialog`).
+- WebRTC (`io.github.webrtc-sdk`) був доданий у v0.7.0 і прибирав застосунок під час підняття слухавки — причина падіння не встановлена. Код і залежність прибрані у v0.8.0. Не вмикати WebRTC знову без журналу падіння (`CrashLog` показує помилку в застосунку).
 - Рядки — у `res/values/strings.xml` (укр) і `res/values-en/strings.xml` (англ); неhardcode-ити текст у Kotlin.
 - Release-збірка ввімкнена з R8 (`isMinifyEnabled`), тому JNI-класи треба тримати в `app/proguard-rules.pro`.

@@ -36,7 +36,6 @@ class PeerLink(
         data class FileMeta(val meta: Protocol.FileMeta) : Event()
         data class FileChunk(val chunk: Protocol.FileChunk) : Event()
         data class Call(val signal: Protocol.CallSignal) : Event()
-        data class Rtc(val signal: Protocol.RtcSignal) : Event()
         data class Audio(val audio: Protocol.Audio) : Event()
         object Closed : Event()
     }
@@ -58,6 +57,10 @@ class PeerLink(
 
     @Volatile
     var remoteName: String = ""
+
+    /** How long the way to the other phone takes, in milliseconds. */
+    @Volatile
+    var rttMs: Int = -1
 
     /** The address of the other phone. */
     val remoteAddress: java.net.InetAddress?
@@ -87,7 +90,12 @@ class PeerLink(
                     break
                 }
                 try {
-                    writer.write(Protocol.TYPE_PING, ByteArray(0))
+                    val stamp = ByteArray(8)
+                    val now = System.currentTimeMillis()
+                    for (index in 0 until 8) {
+                        stamp[index] = (now ushr ((7 - index) * 8)).toByte()
+                    }
+                    writer.write(Protocol.TYPE_PING, stamp)
                 } catch (_: Exception) {
                     break
                 }
@@ -121,9 +129,20 @@ class PeerLink(
             lastWord = System.currentTimeMillis()
             when (frame.type) {
                 Protocol.TYPE_PING -> {
-                    try { writer.write(Protocol.TYPE_PONG, ByteArray(0)) } catch (_: Exception) { }
+                    // The stamp of the ping comes back in the pong, so the
+                    // phone learns how long the way takes.
+                    try { writer.write(Protocol.TYPE_PONG, frame.payload) } catch (_: Exception) { }
                 }
-                Protocol.TYPE_PONG -> Unit
+                Protocol.TYPE_PONG -> {
+                    if (frame.payload.size == 8) {
+                        var sent = 0L
+                        for (index in 0 until 8) {
+                            sent = (sent shl 8) or (frame.payload[index].toLong() and 0xff)
+                        }
+                        val round = System.currentTimeMillis() - sent
+                        if (round in 0..5000) rttMs = round.toInt()
+                    }
+                }
                 Protocol.TYPE_MESSAGE -> {
                     val line = Protocol.decodeChat(frame.payload)
                     if (line != null) onEvent(this@PeerLink, Event.Chat(line))
@@ -143,10 +162,6 @@ class PeerLink(
                 Protocol.TYPE_CALL -> {
                     val signal = Protocol.decodeCall(frame.payload)
                     if (signal != null) onEvent(this@PeerLink, Event.Call(signal))
-                }
-                Protocol.TYPE_RTC -> {
-                    val signal = Protocol.decodeRtcSignal(frame.payload)
-                    if (signal != null) onEvent(this@PeerLink, Event.Rtc(signal))
                 }
                 Protocol.TYPE_AUDIO -> {
                     val audio = Protocol.decodeAudio(frame.payload)

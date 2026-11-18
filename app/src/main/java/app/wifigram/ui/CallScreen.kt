@@ -16,6 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SignalWifi0
+import androidx.compose.material.icons.filled.SignalWifi1
+import androidx.compose.material.icons.filled.SignalWifi2
+import androidx.compose.material.icons.filled.SignalWifi3
+import androidx.compose.material.icons.filled.SignalWifi4
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
@@ -127,6 +132,11 @@ fun CallScreen(
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            if (current.phase == Intercom.Phase.ACTIVE) {
+                Spacer(modifier = Modifier.height(14.dp))
+                QualityRow(current.quality)
+            }
 
             if (current.signalLost) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -248,6 +258,46 @@ fun CallScreen(
 
             Spacer(modifier = Modifier.height(56.dp))
         }
+    }
+}
+
+/**
+ * The state of the connection during the call: the bars of the way, the
+ * delay, the trembling of the sound and the lost words.
+ */
+@Composable
+private fun QualityRow(quality: Intercom.Quality) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        val icon = when (quality.bars) {
+            4 -> Icons.Filled.SignalWifi4
+            3 -> Icons.Filled.SignalWifi3
+            2 -> Icons.Filled.SignalWifi2
+            1 -> Icons.Filled.SignalWifi1
+            else -> Icons.Filled.SignalWifi0
+        }
+        Icon(
+            imageVector = icon,
+            contentDescription = stringResource(R.string.call_quality),
+            tint = when (quality.bars) {
+                4, 3 -> CallGreen
+                2 -> MaterialTheme.colorScheme.tertiary
+                else -> CallRed
+            },
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = stringResource(
+                R.string.call_quality_details,
+                quality.rttMs.coerceAtLeast(0),
+                quality.jitterMs,
+                quality.lossPercent
+            ),
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

@@ -4,7 +4,10 @@ import android.content.Intent
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +16,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.wifigram.Locales
+import app.wifigram.ProfileStore
+import app.wifigram.Settings
 import app.wifigram.R
 
 /** The name of the phone, the other phones see it in the station. */
@@ -144,6 +150,7 @@ fun SettingsDialog(
     onSaveDenoise: (Boolean) -> Unit,
     language: String,
     onSaveLanguage: (String) -> Unit,
+    onMore: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var isDenoise by remember { mutableStateOf(denoise) }
@@ -271,6 +278,232 @@ fun SettingsDialog(
             }) {
                 Text(stringResource(R.string.ready))
             }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                onSaveDenoise(isDenoise)
+                onMore()
+            }) {
+                Text(stringResource(R.string.tuning_more))
+            }
         }
     )
+}
+
+
+/**
+ * The fine tuning of the phone: the voice, the sound and the way the words
+ * travel. Every slider and every switch is checked by the phone itself.
+ */
+@Composable
+fun TuningDialog(
+    initial: Settings,
+    onSave: (Settings) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var value by remember { mutableStateOf(initial) }
+    val context = LocalContext.current
+    val echoReady = remember { AcousticEchoCanceler.isAvailable() }
+    val noiseReady = remember { NoiseSuppressor.isAvailable() }
+
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text(stringResource(R.string.tuning_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.tuning_voice),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_echo),
+                    hint = stringResource(R.string.tuning_echo_hint),
+                    checked = value.echoCancel,
+                    enabled = echoReady,
+                    onChange = { value = value.copy(echoCancel = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_noise),
+                    hint = stringResource(R.string.tuning_noise_hint),
+                    checked = value.noiseSuppress,
+                    enabled = noiseReady,
+                    onChange = { value = value.copy(noiseSuppress = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_gain),
+                    hint = stringResource(R.string.tuning_gain_hint),
+                    checked = value.autoGain,
+                    onChange = { value = value.copy(autoGain = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_opus),
+                    hint = stringResource(R.string.tuning_opus_hint),
+                    checked = value.opus,
+                    onChange = { value = value.copy(opus = it) }
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_volume),
+                    value = value.voiceVolume.toFloat(),
+                    range = 0f..100f,
+                    steps = 19,
+                    text = "${value.voiceVolume}%",
+                    onChange = { value = value.copy(voiceVolume = it.toInt()) }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Text(
+                    text = stringResource(R.string.tuning_sound),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_ring),
+                    hint = stringResource(R.string.tuning_ring_hint),
+                    checked = value.incomingSound,
+                    onChange = { value = value.copy(incomingSound = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_speaker),
+                    hint = stringResource(R.string.tuning_speaker_hint),
+                    checked = value.speakerDefault,
+                    onChange = { value = value.copy(speakerDefault = it) }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Text(
+                    text = stringResource(R.string.tuning_connection),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = stringResource(R.string.tuning_transport),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = value.transport == Settings.TRANSPORT_AUTO,
+                        onClick = { value = value.copy(transport = Settings.TRANSPORT_AUTO) },
+                        label = { Text(stringResource(R.string.tuning_transport_auto)) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    FilterChip(
+                        selected = value.transport == Settings.TRANSPORT_UDP,
+                        onClick = { value = value.copy(transport = Settings.TRANSPORT_UDP) },
+                        label = { Text(stringResource(R.string.tuning_transport_udp)) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    FilterChip(
+                        selected = value.transport == Settings.TRANSPORT_TCP,
+                        onClick = { value = value.copy(transport = Settings.TRANSPORT_TCP) },
+                        label = { Text(stringResource(R.string.tuning_transport_tcp)) }
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.tuning_transport_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_jitter),
+                    value = value.jitterMs.toFloat(),
+                    range = Settings.MIN_JITTER_MS.toFloat()..Settings.MAX_JITTER_MS.toFloat(),
+                    steps = 18,
+                    text = "${value.jitterMs} ms",
+                    onChange = { value = value.copy(jitterMs = it.toInt()) }
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_hello),
+                    value = value.helloIntervalMs.toFloat(),
+                    range = Settings.MIN_HELLO_MS.toFloat()..Settings.MAX_HELLO_MS.toFloat(),
+                    steps = 17,
+                    text = "${value.helloIntervalMs} ms",
+                    onChange = { value = value.copy(helloIntervalMs = it.toInt()) }
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_ack),
+                    value = value.ackIntervalMs.toFloat(),
+                    range = Settings.MIN_ACK_MS.toFloat()..Settings.MAX_ACK_MS.toFloat(),
+                    steps = 18,
+                    text = "${value.ackIntervalMs} ms",
+                    onChange = { value = value.copy(ackIntervalMs = it.toInt()) }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                ProfileStore.saveSettings(context, value)
+                onSave(value)
+                onDismiss()
+            }) {
+                Text(stringResource(R.string.tuning_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss() }) {
+                Text(stringResource(R.string.tuning_cancel))
+            }
+        }
+    )
+}
+
+/** A switch with its name and a short explanation. */
+@Composable
+private fun TuningSwitch(
+    title: String,
+    hint: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title)
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    }
+}
+
+/** A slider with its name and the value it stands for now. */
+@Composable
+private fun TuningSlider(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    text: String,
+    onChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, modifier = Modifier.weight(1f))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Slider(
+            value = value.coerceIn(range.start, range.endInclusive),
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps
+        )
+    }
 }

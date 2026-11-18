@@ -2,14 +2,16 @@ package app.wifigram.call
 
 import android.media.AudioRecord
 import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 
 /**
  * The helpers of the microphone that every phone already carries inside.
  *
- * The platform knows how to take the hum of the machines away and how to
- * take the echo of the speaker away. Both are attached to the recording of
- * the call, and the settings turn them off with one finger.
+ * The platform knows how to take the hum of the machines away, how to take
+ * the echo of the speaker away and how to keep the voice at the same
+ * loudness. All three are attached to the recording of the call, and the
+ * settings turn them off with one finger.
  *
  * The phone may not have them at all — then the sound simply goes through
  * as it came.
@@ -36,11 +38,24 @@ class VoiceEffects(private val record: AudioRecord) {
         null
     }
 
+    private val gain: AutomaticGainControl? = if (AutomaticGainControl.isAvailable()) {
+        try {
+            AutomaticGainControl.create(record.audioSessionId)
+        } catch (_: Exception) {
+            null
+        }
+    } else {
+        null
+    }
+
     /** True when the phone can take the hum away. */
     val noiseAvailable: Boolean get() = noise != null
 
     /** True when the phone can take the echo of the speaker away. */
     val echoAvailable: Boolean get() = echo != null
+
+    /** True when the phone can keep the voice at the same loudness. */
+    val gainAvailable: Boolean get() = gain != null
 
     /** The hum of the fan and the machines gets quieter. */
     fun setNoise(enabled: Boolean) {
@@ -61,8 +76,17 @@ class VoiceEffects(private val record: AudioRecord) {
         }
     }
 
+    /** The phone itself keeps the voice at the same loudness. */
+    fun setGain(enabled: Boolean) {
+        try {
+            gain?.setEnabled(enabled)
+        } catch (_: Exception) {
+        }
+    }
+
     fun release() {
         try { noise?.release() } catch (_: Exception) { }
         try { echo?.release() } catch (_: Exception) { }
+        try { gain?.release() } catch (_: Exception) { }
     }
 }

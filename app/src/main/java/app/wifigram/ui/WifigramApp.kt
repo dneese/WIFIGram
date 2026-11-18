@@ -74,6 +74,7 @@ fun WifigramApp() {
     var nameDialog by remember { mutableStateOf(ProfileStore.name(context).isBlank()) }
     var modeDialog by remember { mutableStateOf(false) }
     var settingsDialog by remember { mutableStateOf(false) }
+    var tuningDialog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf(CallLogStore.list(context)) }
     var missed by remember { mutableIntStateOf(CallLogStore.missedCount(context)) }
     val scope = rememberCoroutineScope()
@@ -329,7 +330,19 @@ fun WifigramApp() {
                 ProfileStore.saveLanguage(context, value)
                 (context as? Activity)?.recreate()
             },
+            onMore = {
+                settingsDialog = false
+                tuningDialog = true
+            },
             onDismiss = { settingsDialog = false }
+        )
+    }
+
+    if (tuningDialog) {
+        TuningDialog(
+            initial = ProfileStore.settings(context),
+            onSave = { value -> ProfileStore.saveSettings(context, value) },
+            onDismiss = { tuningDialog = false }
         )
     }
 }
