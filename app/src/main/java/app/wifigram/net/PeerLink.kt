@@ -36,6 +36,7 @@ class PeerLink(
         data class FileMeta(val meta: Protocol.FileMeta) : Event()
         data class FileChunk(val chunk: Protocol.FileChunk) : Event()
         data class Call(val signal: Protocol.CallSignal) : Event()
+        data class Rtc(val signal: Protocol.RtcSignal) : Event()
         data class Audio(val audio: Protocol.Audio) : Event()
         object Closed : Event()
     }
@@ -142,6 +143,10 @@ class PeerLink(
                 Protocol.TYPE_CALL -> {
                     val signal = Protocol.decodeCall(frame.payload)
                     if (signal != null) onEvent(this@PeerLink, Event.Call(signal))
+                }
+                Protocol.TYPE_RTC -> {
+                    val signal = Protocol.decodeRtcSignal(frame.payload)
+                    if (signal != null) onEvent(this@PeerLink, Event.Rtc(signal))
                 }
                 Protocol.TYPE_AUDIO -> {
                     val audio = Protocol.decodeAudio(frame.payload)

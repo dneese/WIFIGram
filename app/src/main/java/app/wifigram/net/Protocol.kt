@@ -59,6 +59,7 @@ object Protocol {
 
     /** The answer that a chat message has come. */
     const val TYPE_MESSAGE_ACK = 10
+    const val TYPE_RTC = 11
 
     const val MAX_FRAME = 2 * 1024 * 1024
     const val CHUNK_SIZE = 64 * 1024
@@ -234,6 +235,59 @@ object Protocol {
             name = if (parts.size > 2) parts[2] else "",
             extra = if (parts.size > 3) parts[3] else ""
         )
+    }
+
+    // ── the WebRTC signaling ──
+
+    const val RTC_OFFER = "offer"
+    const val RTC_ANSWER = "answer"
+    const val RTC_CANDIDATE = "candidate"
+
+    data class RtcSignal(
+        val kind: String,
+        val callId: String,
+        val payload: String
+    )
+
+    fun encodeRtcSignal(signal: RtcSignal): ByteArray =
+        bytes("${clean(signal.kind)}|${clean(signal.callId)}|${encodeOpaque(signal.payload)}")
+
+    fun decodeRtcSignal(payload: ByteArray): RtcSignal? {
+        val parts = text(payload).split("|", limit = 3)
+        if (parts.size != 3) return null
+        val kind = parts[0]
+        if (kind != RTC_OFFER && kind != RTC_ANSWER && kind != RTC_CANDIDATE) return null
+        val callId = parts[1]
+        if (callId.isBlank()) return null
+        val opaque = decodeOpaque(parts[2]) ?: return null
+        return RtcSignal(kind, callId, opaque)
+    }
+
+    data class RtcCandidate(
+        val sdpMid: String,
+        val sdpMLineIndex: Int,
+        val candidate: String
+    )
+
+    fun encodeRtcCandidate(candidate: RtcCandidate): String =
+        encodeOpaque("${clean(candidate.sdpMid)}|${candidate.sdpMLineIndex}|${clean(candidate.candidate)}")
+
+    fun decodeRtcCandidate(payload: String): RtcCandidate? {
+        val decoded = decodeOpaque(payload) ?: return null
+        val parts = decoded.split("|", limit = 3)
+        if (parts.size != 3) return null
+        val index = parts[1].toIntOrNull() ?: return null
+        if (index < 0) return null
+        return RtcCandidate(parts[0], index, parts[2])
+    }
+
+    private fun encodeOpaque(value: String): String =
+        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
+
+    private fun decodeOpaque(value: String): String? = try {
+        String(java.util.Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
     // ── the greeting ──
