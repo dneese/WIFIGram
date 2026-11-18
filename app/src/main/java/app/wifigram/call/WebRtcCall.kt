@@ -26,7 +26,8 @@ class WebRtcCall(
     context: Context,
     private val callId: String,
     private val onSignal: (Protocol.RtcSignal) -> Unit,
-    private val onConnectionChanged: (Boolean) -> Unit
+    private val onConnectionChanged: (Boolean) -> Unit,
+    private val onError: (String) -> Unit = {}
 ) {
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -46,11 +47,17 @@ class WebRtcCall(
     private var everConnected = false
 
     fun start(initiator: Boolean) {
-        synchronized(lock) {
+        val ready = synchronized(lock) {
             if (closed || peerConnection != null) return
-            createPeerConnection()
+            try {
+                createPeerConnection()
+            } catch (error: Throwable) {
+                onError("WebRTC: ${error.message ?: error.javaClass.simpleName}")
+                return
+            }
+            peerConnection != null
         }
-        if (initiator) createOffer()
+        if (ready && initiator) createOffer()
     }
 
     fun handleOffer(sdp: String) {
@@ -121,10 +128,13 @@ class WebRtcCall(
     }
 
     private fun createPeerConnection() {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(appContext)
-                .createInitializationOptions()
-        )
+        if (!factoryInitialized) {
+            PeerConnectionFactory.initialize(
+                PeerConnectionFactory.InitializationOptions.builder(appContext)
+                    .createInitializationOptions()
+            )
+            factoryInitialized = true
+        }
         val audioDevice = JavaAudioDeviceModule.builder(appContext)
             .setUseHardwareAcousticEchoCanceler(
                 JavaAudioDeviceModule.isBuiltInAcousticEchoCancelerSupported()
@@ -318,7 +328,6 @@ class WebRtcCall(
 
     private inner abstract class SimpleSdpObserver : SdpObserver {
         protected var createdDescription: SessionDescription? = null
-
         override fun onCreateSuccess(description: SessionDescription) {
             createdDescription = description
         }
@@ -332,5 +341,9 @@ class WebRtcCall(
         override fun onSetFailure(error: String) {
             onConnectionChanged(false)
         }
+    }
+
+    companion object {
+        private var factoryInitialized = false
     }
 }

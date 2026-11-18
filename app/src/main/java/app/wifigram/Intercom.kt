@@ -1217,6 +1217,9 @@ class Intercom(
             },
             onConnectionChanged = { connected ->
                 scope.launch { updateRtcConnection(remoteId, connected) }
+            },
+            onError = { message ->
+                showVoiceError(message)
             }
         )
         rtcCalls[remoteId] = session
@@ -1237,6 +1240,13 @@ class Intercom(
             Protocol.RTC_OFFER -> session.handleOffer(signal.payload)
             Protocol.RTC_ANSWER -> session.handleAnswer(signal.payload)
             Protocol.RTC_CANDIDATE -> session.handleCandidate(signal.payload)
+        }
+    }
+
+    private fun showVoiceError(message: String) {
+        android.util.Log.e("WifigramVoice", message)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
