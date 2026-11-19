@@ -33,6 +33,7 @@ import app.wifigram.Locales
 import app.wifigram.ProfileStore
 import app.wifigram.Settings
 import app.wifigram.R
+import app.wifigram.call.VoiceTrace
 
 /** The name of the phone, the other phones see it in the station. */
 @Composable
@@ -152,6 +153,7 @@ fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val echoReady = remember { AcousticEchoCanceler.isAvailable() }
+    var trace by remember { mutableStateOf(VoiceTrace.read(context)) }
     val version = remember {
         try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
@@ -198,6 +200,28 @@ fun SettingsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                Text(
+                    text = stringResource(R.string.voice_journal_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = trace?.lineSequence()?.toList()?.takeLast(8)?.joinToString("\n")
+                        ?: stringResource(R.string.voice_journal_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                if (trace != null) {
+                    TextButton(onClick = {
+                        VoiceTrace.clear(context)
+                        trace = null
+                    }) {
+                        Text(stringResource(R.string.voice_journal_clear))
+                    }
+                }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 

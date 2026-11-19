@@ -119,4 +119,7 @@
     <string name="call_voice_diagnostic">Diagnostic: %1$s</string>
     <string name="voice_channel">Call voice</string>
     <string name="voice_notification">Call in progress</string>
+    <string name="voice_journal_title">Voice journal</string>
+    <string name="voice_journal_empty">The journal is empty: no calls yet.</string>
+    <string name="voice_journal_clear">Clear the journal</string>
 </resources>

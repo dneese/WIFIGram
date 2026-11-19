@@ -122,4 +122,7 @@
     <string name="call_voice_diagnostic">Діагностика: %1$s</string>
     <string name="voice_channel">Голос дзвінка</string>
     <string name="voice_notification">Дзвінок триває</string>
+    <string name="voice_journal_title">Журнал голосу</string>
+    <string name="voice_journal_empty">Журнал порожній: дзвінків ще не було.</string>
+    <string name="voice_journal_clear">Очистити журнал</string>
 </resources>
