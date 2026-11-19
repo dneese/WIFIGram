@@ -64,8 +64,6 @@ class WebRtcEngine(
     private var closed = false
     private var statsJob: Thread? = null
     private var initiator = false
-    private var hardwareEcho = false
-    private var hardwareNoise = false
     private var volumePercent = 100
     private var volumeBefore = -1
 
@@ -194,16 +192,11 @@ class WebRtcEngine(
         }
         VoiceTrace.stage(appContext, "webrtc-factory-initialized")
 
-        hardwareEcho = JavaAudioDeviceModule.isBuiltInAcousticEchoCancelerSupported()
-        hardwareNoise = JavaAudioDeviceModule.isBuiltInNoiseSuppressorSupported()
-
         val audioDevice = JavaAudioDeviceModule.builder(appContext)
             .setSampleRate(SAMPLE_RATE)
             .setInputSampleRate(SAMPLE_RATE)
             .setOutputSampleRate(SAMPLE_RATE)
             .setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-            .setUseHardwareAcousticEchoCanceler(hardwareEcho)
-            .setUseHardwareNoiseSuppressor(hardwareNoise)
             .setUseLowLatency(true)
             .setAudioAttributes(
                 android.media.AudioAttributes.Builder()
@@ -327,8 +320,8 @@ class WebRtcEngine(
     }
 
     private fun audioConstraints(): MediaConstraints = MediaConstraints().apply {
-        mandatory.add(constraint("googEchoCancellation", if (hardwareEcho) "false" else "true"))
-        mandatory.add(constraint("googNoiseSuppression", if (hardwareNoise) "false" else "true"))
+        mandatory.add(constraint("googEchoCancellation", "true"))
+        mandatory.add(constraint("googNoiseSuppression", "true"))
         mandatory.add(constraint("googAutoGainControl", "true"))
         mandatory.add(constraint("googHighpassFilter", "true"))
         mandatory.add(constraint("googAudioFling", "true"))
@@ -492,7 +485,7 @@ class WebRtcEngine(
         }
 
         override fun onIceCandidateError(event: IceCandidateErrorEvent) {
-            VoiceTrace.error(appContext, "candidate ${event.error}")
+            VoiceTrace.error(appContext, "candidate ${event.errorCode} ${event.errorText}")
         }
 
         override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>) = Unit

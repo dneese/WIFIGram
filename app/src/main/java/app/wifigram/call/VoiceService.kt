@@ -15,6 +15,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import androidx.core.app.NotificationCompat
+import androidx.core.content.IntentCompat
 import app.wifigram.CrashLog
 import app.wifigram.Locales
 import app.wifigram.ProfileStore
@@ -56,8 +57,8 @@ class VoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun onBind(intent: Intent?): IBinder? {
-        client = intent?.getParcelableExtra(EXTRA_CLIENT)
-        return Messenger(handler)
+        client = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_CLIENT, Messenger::class.java) }
+        return Messenger(handler).binder
     }
 
     override fun onDestroy() {
