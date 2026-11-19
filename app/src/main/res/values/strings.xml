@@ -15,8 +15,8 @@
     <string name="tab_intercom">Інтерком</string>
     <string name="peers_online">%1$d у мережі</string>
     <string name="action_settings">Налаштування</string>
-    <string name="action_mode">Режим зв\'язку</string>
-    <string name="action_name">Ім\'я</string>
+    <string name="action_mode">Режим зв\\'язку</string>
+    <string name="action_name">Ім\\'я</string>
 
     <!-- the screen of the call -->
     <string name="call_state_calling">Виклик</string>
@@ -26,7 +26,7 @@
     <string name="call_calling">Телефон викликає…</string>
     <string name="call_caller">Хто дзвонить</string>
     <string name="call_waiting_line">Ви чекаєте на лінії</string>
-    <string name="call_no_signal">Немає зв\'язку, очікуємо…</string>
+    <string name="call_no_signal">Немає зв\\'язку, очікуємо…</string>
     <string name="call_microphone">Мікрофон</string>
     <string name="call_speaker">Динамік</string>
     <string name="call_earpiece">Вухо</string>
@@ -56,7 +56,7 @@
     <string name="chat_scroll_down">Униз</string>
     <string name="chat_sent">Надіслано</string>
     <string name="chat_delivered">Доставлено</string>
-    <string name="chat_queued">Чекає з\'єднання</string>
+    <string name="chat_queued">Чекає з\\'єднання</string>
 
     <!-- the station -->
     <string name="station_empty">Немає інших телефонів</string>
@@ -66,18 +66,18 @@
     <string name="station_call">Дзвінок</string>
 
     <!-- the state of a phone -->
-    <string name="status_lost">зв\'язок втрачено</string>
+    <string name="status_lost">зв\\'язок втрачено</string>
     <string name="status_active">у розмові</string>
     <string name="status_calling">дзвонить</string>
     <string name="status_free">вільний</string>
     <string name="phone_fallback">Телефон</string>
 
     <!-- the dialogs -->
-    <string name="name_title">Ваше ім\'я</string>
-    <string name="name_hint">Це ім\'я побачать інші телефони в мережі.</string>
-    <string name="name_label">Ім\'я</string>
+    <string name="name_title">Ваше ім\\'я</string>
+    <string name="name_hint">Це ім\\'я побачать інші телефони в мережі.</string>
+    <string name="name_label">Ім\\'я</string>
     <string name="ready">Готово</string>
-    <string name="mode_title">Режим зв\'язку</string>
+    <string name="mode_title">Режим зв\\'язку</string>
     <string name="mode_network">Мережа: усі телефони в одній мережі WiFi.</string>
     <string name="mode_direct">WiFi Direct: два телефони напряму, без роутера.</string>
     <string name="mode_network_chip">Мережа</string>
@@ -98,7 +98,7 @@
     <string name="wifi_direct_failed">WiFi Direct не вдався</string>
     <string name="wifi_direct_unavailable">WiFi Direct недоступний</string>
     <string name="wifi_direct_group_ready">Група WiFi Direct готова</string>
-    <string name="wifi_direct_channel_lost">Зв\'язок WiFi Direct втрачено</string>
+    <string name="wifi_direct_channel_lost">Зв\\'язок WiFi Direct втрачено</string>
     <string name="wifi_direct_connecting">Підключення до групи...</string>
     <string name="wifi_direct_search">Пошук групи WiFi Direct...</string>
     <string name="wifi_direct_group">Створення групи WiFi Direct...</string>
@@ -106,7 +106,7 @@
     <color name="ic_launcher_background">#1A73E8</color>
 
     <string name="call_quality_details">%1$d мс · тремтіння %2$d мс · втрата %3$d%%</string>
-    <string name="tuning_title">Налаштування голосу та зв\'язку</string>
+    <string name="tuning_title">Налаштування голосу та зв\\'язку</string>
     <string name="tuning_voice">Голос</string>
     <string name="tuning_volume">Гучність голосу</string>
     <string name="tuning_sound">Звук</string>
@@ -147,7 +147,7 @@
     <string name="tuning_highpass">Відсікає низькі звуки</string>
     <string name="tuning_highpass_hint">Гул і стук зникають.</string>
     <string name="tuning_ice">Шлях до іншого телефона</string>
-    <string name="tuning_ice_transport">Спосіб з'єднання</string>
+    <string name="tuning_ice_transport">Спосіб з\'єднання</string>
     <string name="tuning_ice_all">Усі</string>
     <string name="tuning_ice_relay">Тільки через посередника</string>
     <string name="tuning_tcp">Через TCP</string>
@@ -166,7 +166,7 @@
     <string name="tuning_gather_continually">Шукати шлях і далі</string>
     <string name="tuning_gather_continually_hint">Телефон шукає нові адреси навіть під час розмови.</string>
     <string name="tuning_trickle">Адреси одразу</string>
-    <string name="tuning_trickle_hint">Адреси йдуть до іншого телефона щойно з'явилися. Якщо вимкнено, опис чекає на всі адреси.</string>
+    <string name="tuning_trickle_hint">Адреси йдуть до іншого телефона щойно з\'явилися. Якщо вимкнено, опис чекає на всі адреси.</string>
     <string name="tuning_rtcp_mux">Одна труба для всього</string>
     <string name="tuning_rtcp_mux_hint">Голос і керування йдуть однією дорогою.</string>
     <string name="tuning_fast_accelerate">Швидко викидати старі пакети</string>
