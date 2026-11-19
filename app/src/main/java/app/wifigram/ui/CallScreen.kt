@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,7 +61,8 @@ fun CallScreen(
     onCancel: () -> Unit,
     onEnd: () -> Unit,
     onToggleMute: () -> Unit,
-    onToggleSpeaker: () -> Unit
+    onToggleSpeaker: () -> Unit,
+    onDiagnostics: () -> Unit
 ) {
     val call by engine.call.collectAsStateWithLifecycle()
     val current = call ?: return
@@ -128,6 +130,14 @@ fun CallScreen(
             if (current.phase == Intercom.Phase.ACTIVE) {
                 Spacer(modifier = Modifier.height(14.dp))
                 QualityRow(current.quality)
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = onDiagnostics) {
+                    Text(
+                        text = stringResource(R.string.diagnostics_open),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             if (current.signalLost) {

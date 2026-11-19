@@ -16,7 +16,8 @@ import java.util.Locale
 object VoiceTrace {
 
     private const val FILE_NAME = "voice_trace.txt"
-    private const val MAX_LINES = 200
+    private const val MAX_LINES = 400
+    private const val MAX_BYTES = 256 * 1024
 
     /** Begins the journal of one call. */
     fun start(context: Context, callId: String) {
@@ -60,9 +61,21 @@ object VoiceTrace {
         try {
             val file = file(context)
             val stamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-            val old = if (file.exists()) file.readText() else ""
-            val kept = (old + "$stamp $line\n").lines().takeLast(MAX_LINES).joinToString("\n")
-            file.writeText(kept)
+            // The line is added at the end of the file, so two processes may
+            // write at the same moment and nothing gets lost.
+            file.appendText("$stamp $line\n")
+            trim(context)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** The journal stays small: the old lines go away. */
+    private fun trim(context: Context) {
+        try {
+            val file = file(context)
+            if (file.length() <= MAX_BYTES) return
+            val kept = file.readLines().takeLast(MAX_LINES)
+            file.writeText(kept.joinToString("\n") + "\n")
         } catch (_: Exception) {
         }
     }

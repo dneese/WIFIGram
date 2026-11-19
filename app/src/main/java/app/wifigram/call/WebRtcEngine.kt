@@ -39,6 +39,7 @@ import org.webrtc.audio.JavaAudioDeviceModule
  */
 class WebRtcEngine(
     context: Context,
+    private val tuning: VoiceTuning,
     private val callbacks: Callbacks
 ) {
 
@@ -66,6 +67,18 @@ class WebRtcEngine(
     private var initiator = false
     private var volumePercent = 100
     private var volumeBefore = -1
+    private var localSdp = ""
+    private var remoteSdp = ""
+    private var pendingDescription: String? = null
+    private var pendingKind: String = ""
+    private var localCandidates = ""
+    private var remoteCandidates = ""
+    private var selectedPair = ""
+    private var codecName = ""
+    private var rttValue = -1
+    private var jitterValue = 0
+    private var lossValue = 0
+    private var lastStatsText = ""
 
     /** Starts the engine. The initiator makes the offer. */
     fun start(initiator: Boolean) {
@@ -193,11 +206,12 @@ class WebRtcEngine(
         VoiceTrace.stage(appContext, "webrtc-factory-initialized")
 
         val audioDevice = JavaAudioDeviceModule.builder(appContext)
-            .setSampleRate(SAMPLE_RATE)
-            .setInputSampleRate(SAMPLE_RATE)
-            .setOutputSampleRate(SAMPLE_RATE)
-            .setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-            .setUseLowLatency(true)
+            .setSampleRate(tuning.sampleRate)
+            .setInputSampleRate(tuning.sampleRate)
+            .setOutputSampleRate(tuning.sampleRate)
+            .setAudioSource(tuning.audioSource)
+            .setUseHardwareNoiseSuppressor(tuning.hardwareNoiseSuppress)
+            .setUseLowLatency(tuning.useLowLatency)
             .setAudioAttributes(
                 android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
@@ -215,16 +229,40 @@ class WebRtcEngine(
         VoiceTrace.stage(appContext, "webrtc-factory-created")
 
         val configuration = PeerConnection.RTCConfiguration(emptyList()).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
-            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            sdpSemantics = when (tuning.sdpSemantics) {
+                VoiceTuning.SDP_PLAN_B -> PeerConnection.SdpSemantics.PLAN_B
+                else -> PeerConnection.SdpSemantics.UNIFIED_PLAN
+            }
+            bundlePolicy = when (tuning.bundle) {
+                VoiceTuning.BUNDLE_BALANCED -> PeerConnection.BundlePolicy.BALANCED
+                VoiceTuning.BUNDLE_COMPAT -> PeerConnection.BundlePolicy.MAXCOMPAT
+                else -> PeerConnection.BundlePolicy.MAXBUNDLE
+            }
+            rtcpMuxPolicy = if (tuning.rtcpMux) {
+                PeerConnection.RtcpMuxPolicy.REQUIRE
+            } else {
+                PeerConnection.RtcpMuxPolicy.NEGOTIATE
+            }
+            continualGatheringPolicy = if (tuning.gatherContinually) {
+                PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            } else {
+                PeerConnection.ContinualGatheringPolicy.GATHER_ONCE
+            }
             iceServers = emptyList()
-            iceTransportsType = PeerConnection.IceTransportsType.ALL
-            candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.ALL
-            tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED
-            audioJitterBufferMaxPackets = 20
-            audioJitterBufferFastAccelerate = true
+            iceTransportsType = when (tuning.iceTransport) {
+                VoiceTuning.ICE_RELAY -> PeerConnection.IceTransportsType.RELAY
+                else -> PeerConnection.IceTransportsType.ALL
+            }
+            candidateNetworkPolicy = when (tuning.candidatePolicy) {
+                VoiceTuning.CAND_LOW_COST -> PeerConnection.CandidateNetworkPolicy.LOW_COST
+                else -> PeerConnection.CandidateNetworkPolicy.ALL
+            }
+            tcpCandidatePolicy = when (tuning.tcpCandidate) {
+                VoiceTuning.TCP_DISABLED -> PeerConnection.TcpCandidatePolicy.DISABLED
+                else -> PeerConnection.TcpCandidatePolicy.ENABLED
+            }
+            audioJitterBufferMaxPackets = tuning.jitterPackets.coerceIn(10, 100)
+            audioJitterBufferFastAccelerate = tuning.fastAccelerate
         }
 
         val connection = peerFactory.createPeerConnection(configuration, PeerObserver())
@@ -266,7 +304,8 @@ class WebRtcEngine(
             }
 
             override fun onSetSuccess() {
-                emit(VoiceMessages.KIND_OFFER, createdDescription?.description.orEmpty())
+                localSdp = createdDescription?.description.orEmpty()
+                publish(VoiceMessages.KIND_OFFER, localSdp)
             }
         }, sdpConstraints(iceRestart))
     }
@@ -281,9 +320,27 @@ class WebRtcEngine(
             }
 
             override fun onSetSuccess() {
-                emit(VoiceMessages.KIND_ANSWER, createdDescription?.description.orEmpty())
+                localSdp = createdDescription?.description.orEmpty()
+                publish(VoiceMessages.KIND_ANSWER, localSdp)
             }
         }, sdpConstraints(false))
+    }
+
+    /**
+     * Sends the description to the other phone.
+     *
+     * When the paths of the ice may not go as they come, the description
+     * waits until the ice has looked everywhere: then the other phone gets
+     * the whole list at once.
+     */
+    private fun publish(kind: String, description: String) {
+        if (tuning.trickle) {
+            emit(kind, description)
+            return
+        }
+        pendingDescription = description
+        pendingKind = kind
+        VoiceTrace.stage(appContext, "webrtc-waiting-gathering")
     }
 
     private fun setRemoteDescription(
@@ -294,6 +351,7 @@ class WebRtcEngine(
         val connection = peerConnection ?: return
         connection.setRemoteDescription(object : SimpleSdpObserver() {
             override fun onSetSuccess() {
+                remoteSdp = sdp
                 synchronized(lock) {
                     remoteDescriptionSet = true
                 }
@@ -320,12 +378,12 @@ class WebRtcEngine(
     }
 
     private fun audioConstraints(): MediaConstraints = MediaConstraints().apply {
-        mandatory.add(constraint("googEchoCancellation", "true"))
-        mandatory.add(constraint("googNoiseSuppression", "true"))
-        mandatory.add(constraint("googAutoGainControl", "true"))
-        mandatory.add(constraint("googHighpassFilter", "true"))
+        mandatory.add(constraint("googEchoCancellation", tuning.softwareEcho.toString()))
+        mandatory.add(constraint("googNoiseSuppression", tuning.softwareNoise.toString()))
+        mandatory.add(constraint("googAutoGainControl", tuning.autoGain.toString()))
+        mandatory.add(constraint("googHighpassFilter", tuning.highpass.toString()))
         mandatory.add(constraint("googAudioFling", "true"))
-        mandatory.add(constraint("googMaxAverageBitrate", "32000"))
+        mandatory.add(constraint("googMaxAverageBitrate", (tuning.maxBitrate * 1000).toString()))
     }
 
     private fun sdpConstraints(iceRestart: Boolean): MediaConstraints = MediaConstraints().apply {
@@ -401,6 +459,9 @@ class WebRtcEngine(
                 codecs[id] = mime
             }
         }
+        val mine = StringBuilder()
+        val theirs = StringBuilder()
+        var pair = ""
         for (stats in report.statsMap.values) {
             val members = stats.members
             when (stats.type) {
@@ -412,19 +473,29 @@ class WebRtcEngine(
                         rttMs = (roundTrip * 1000).toInt()
                     }
                     val packetsLost = long(members["packetsLost"])
-                    if (packetsLost != null) lost += packetsLost
+                    if (packetsLost != null) lost += safeCount(packetsLost)
                     val packetsReceived = long(members["packetsReceived"])
                     if (packetsReceived != null) received += packetsReceived
                     val id = members["codecId"] as? String
                     val mime = id?.let { codecs[it] }
                     if (mime != null && stats.type == "inbound-rtp") codec = mime
                 }
+                "local-candidate" -> {
+                    mine.append(candidateLine(members)).append("\n")
+                }
+                "remote-candidate" -> {
+                    theirs.append(candidateLine(members)).append("\n")
+                }
                 "candidate-pair" -> {
-                    if (members["selected"] == true || members["state"] == "succeeded") {
+                    val selected = members["selected"] == true ||
+                        members["state"] == "succeeded" ||
+                        members["nominated"] == true
+                    if (selected) {
                         val current = number(members["currentRoundTripTime"])
                         if (current != null && current >= 0 && rttMs < 0) {
                             rttMs = (current * 1000).toInt()
                         }
+                        pair = candidateLine(members)
                     }
                 }
             }
@@ -434,7 +505,109 @@ class WebRtcEngine(
         } else {
             0
         }
+        localCandidates = mine.toString().trim()
+        remoteCandidates = theirs.toString().trim()
+        selectedPair = pair
+        codecName = codec
+        rttValue = rttMs
+        jitterValue = jitterMs
+        lossValue = loss
+        lastStatsText = "rtt=$rttMs jitter=$jitterMs loss=$loss codec=${codec.ifBlank { "?" }}"
         callbacks.onStats(rttMs, jitterMs, loss, codec)
+    }
+
+    private fun safeCount(value: Long): Long = if (value < 0) 0L else value
+
+    /** One line about one address of the ice. */
+    private fun candidateLine(members: Map<String, Any?>): String {
+        val address = members["address"] as? String ?: "?"
+        val port = members["port"] as? Int ?: members["port"]?.toString()?.toIntOrNull() ?: 0
+        val protocol = members["protocol"] as? String ?: "?"
+        val type = members["candidateType"] as? String ?: "?"
+        val network = members["networkType"] as? String ?: ""
+        val id = members["id"] as? String ?: ""
+        return "$address:$port $protocol $type $network id=$id"
+    }
+
+    /**
+     * The full report of the call: what the phone did, what it heard and
+     * what it could not do. The user may send this text to the developer.
+     */
+    fun report(): String {
+        val connection = peerConnection
+        val builder = StringBuilder()
+        builder.append("=== WIFIGram voice report ===\n")
+        builder.append("time: ").append(now()).append("\n")
+        builder.append("engine: webrtc (stream-webrtc-android 1.3.10)\n")
+        builder.append("tuning: ").append(tuningLine()).append("\n")
+        builder.append("state: ").append(stateLine(connection)).append("\n")
+        builder.append("audio: ").append(audioLine()).append("\n")
+        builder.append("stats: ").append(lastStatsText).append("\n")
+        builder.append("pair: ").append(selectedPair.ifBlank { "none" }).append("\n")
+        builder.append("local candidates:\n")
+        builder.append(localCandidates.ifBlank { "(none)" }).append("\n")
+        builder.append("remote candidates:\n")
+        builder.append(remoteCandidates.ifBlank { "(none)" }).append("\n")
+        builder.append("--- local sdp ---\n")
+        builder.append(localSdp.ifBlank { "(none)" }).append("\n")
+        builder.append("--- remote sdp ---\n")
+        builder.append(remoteSdp.ifBlank { "(none)" }).append("\n")
+        return builder.toString()
+    }
+
+    private fun tuningLine(): String = buildString {
+        append("source=").append(tuning.audioSource)
+        append(" rate=").append(tuning.sampleRate)
+        append(" lowLatency=").append(tuning.useLowLatency)
+        append(" hwNs=").append(tuning.hardwareNoiseSuppress)
+        append(" swAec=").append(tuning.softwareEcho)
+        append(" swNs=").append(tuning.softwareNoise)
+        append(" agc=").append(tuning.autoGain)
+        append(" highpass=").append(tuning.highpass)
+        append(" maxKbps=").append(tuning.maxBitrate)
+        append(" iceTransport=").append(tuning.iceTransport)
+        append(" tcp=").append(tuning.tcpCandidate)
+        append(" policy=").append(tuning.candidatePolicy)
+        append(" gather=").append(tuning.gatherContinually)
+        append(" bundle=").append(tuning.bundle)
+        append(" rtcpMux=").append(tuning.rtcpMux)
+        append(" sdp=").append(tuning.sdpSemantics)
+        append(" jitterPackets=").append(tuning.jitterPackets)
+        append(" fastAccelerate=").append(tuning.fastAccelerate)
+        append(" trickle=").append(tuning.trickle)
+        append(" restartOnFail=").append(tuning.iceRestartOnFail)
+    }
+
+    private fun stateLine(connection: PeerConnection?): String {
+        if (connection == null) return "no connection"
+        return "ice=${connection.iceConnectionState()} gathering=${connection.iceGatheringState()} " +
+            "signaling=${connection.signalingState()} peer=${connection.connectionState()}"
+    }
+
+    private fun audioLine(): String {
+        val hardwareAec = try {
+            android.media.audiofx.AcousticEchoCanceler.isAvailable()
+        } catch (_: Exception) {
+            false
+        }
+        val hardwareNs = try {
+            android.media.audiofx.NoiseSuppressor.isAvailable()
+        } catch (_: Exception) {
+            false
+        }
+        val device = try {
+            audioManager.activeRecordingInfo?.deviceName ?: "?"
+        } catch (_: Exception) {
+            "?"
+        }
+        return "hwAecAvailable=$hardwareAec hwNsAvailable=$hardwareNs input=$device"
+    }
+
+    private fun now(): String = try {
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+    } catch (_: Exception) {
+        ""
     }
 
     private fun number(value: Any?): Double? = when (value) {
@@ -475,7 +648,18 @@ class WebRtcEngine(
             callbacks.onState(if (receiving) "RECEIVING" else "WAITING")
         }
 
-        override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) = Unit
+        override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) {
+            VoiceTrace.stage(appContext, "gathering-${state.name}")
+            if (state == PeerConnection.IceGatheringState.COMPLETE) {
+                val waiting = pendingDescription
+                if (waiting != null && pendingKind.isNotBlank()) {
+                    pendingDescription = null
+                    val kind = pendingKind
+                    pendingKind = ""
+                    emit(kind, waiting)
+                }
+            }
+        }
 
         override fun onIceCandidate(candidate: IceCandidate) {
             callbacks.onSignal(

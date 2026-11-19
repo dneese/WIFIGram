@@ -33,6 +33,9 @@ object VoiceMessages {
     /** The way of the ice must be looked for again. */
     const val RESTART_ICE = 7
 
+    /** The app asks the voice process for the full report. */
+    const val REPORT = 8
+
     /** The voice process sends the description or the path back. */
     const val SIGNAL = 10
 
@@ -44,6 +47,9 @@ object VoiceMessages {
 
     /** Something went wrong; the text says what. */
     const val ERROR = 13
+
+    /** The voice process sends the full report of the call. */
+    const val DIAGNOSTICS = 14
 
     const val KEY_CALL_ID = "callId"
     const val KEY_INITIATOR = "initiator"
@@ -57,6 +63,8 @@ object VoiceMessages {
     const val KEY_JITTER = "jitter"
     const val KEY_LOSS = "loss"
     const val KEY_CODEC = "codec"
+    const val KEY_TUNING = "tuning"
+    const val KEY_REPORT = "report"
 
     const val KIND_OFFER = "offer"
     const val KIND_ANSWER = "answer"

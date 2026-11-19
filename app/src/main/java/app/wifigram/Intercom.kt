@@ -155,6 +155,10 @@ class Intercom(
     private val _missed = MutableStateFlow(0)
     val missed: StateFlow<Int> = _missed.asStateFlow()
 
+    /** The full report of the voice of the call, as the user may send it. */
+    private val _voiceReport = MutableStateFlow("")
+    val voiceReport: StateFlow<String> = _voiceReport.asStateFlow()
+
     /** What the phone tells about the connection, for example the direct one. */
     private val _status = MutableStateFlow("")
     val status: StateFlow<String> = _status.asStateFlow()
@@ -936,7 +940,12 @@ class Intercom(
             override fun onState(state: String) {
                 val value = state.uppercase()
                 if (value == "FAILED") {
-                    failVoice(call.callId, VoiceEngine.REASON_ICE_FAILED)
+                    if (ProfileStore.tuning(context).iceRestartOnFail) {
+                        VoiceTrace.stage(context, "ice-failed-restart")
+                        restartIce()
+                    } else {
+                        failVoice(call.callId, VoiceEngine.REASON_ICE_FAILED)
+                    }
                 } else if (value == "CLOSED") {
                     failVoice(call.callId, VoiceEngine.REASON_ICE_CLOSED)
                 }
@@ -959,12 +968,16 @@ class Intercom(
             override fun onDead(text: String) {
                 failVoice(call.callId, VoiceEngine.REASON_PROCESS_DIED, text)
             }
+
+            override fun onReport(text: String) {
+                _voiceReport.value = text
+            }
         })
         voiceClient = client
         webRtcActive = true
         try {
             client.connect()
-            client.start(call.callId, initiator)
+            client.start(call.callId, initiator, ProfileStore.tuning(context))
             return true
         } catch (error: Exception) {
             webRtcActive = false
@@ -993,6 +1006,11 @@ class Intercom(
     /** Asks the engine to look for the way again after the WiFi came back. */
     private fun restartIce() {
         try { voiceClient?.restartIce() } catch (_: Exception) { }
+    }
+
+    /** Asks the voice process for the full report of the call. */
+    fun requestVoiceReport() {
+        try { voiceClient?.requestReport() } catch (_: Exception) { }
     }
 
     /** Sends the offer, the answer or the candidate to the other phone. */
@@ -1026,6 +1044,7 @@ class Intercom(
 
     private fun stopVoice() {
         webRtcActive = false
+        _voiceReport.value = ""
         try { voiceClient?.release() } catch (_: Exception) { }
         voiceClient = null
     }

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wifigram.App
 import app.wifigram.CallLogStore
+import app.wifigram.call.VoiceTrace
 import app.wifigram.Intercom
 import app.wifigram.IntercomService
 import app.wifigram.ProfileStore
@@ -75,6 +76,7 @@ fun WifigramApp() {
     var modeDialog by remember { mutableStateOf(false) }
     var settingsDialog by remember { mutableStateOf(false) }
     var tuningDialog by remember { mutableStateOf(false) }
+    var diagnosticsDialog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf(CallLogStore.list(context)) }
     var missed by remember { mutableIntStateOf(CallLogStore.missedCount(context)) }
     val scope = rememberCoroutineScope()
@@ -291,7 +293,8 @@ fun WifigramApp() {
                     onCancel = { engine.cancelCall() },
                     onEnd = { engine.endCall() },
                     onToggleMute = { engine.toggleMute() },
-                    onToggleSpeaker = { engine.toggleSpeaker() }
+                    onToggleSpeaker = { engine.toggleSpeaker() },
+                    onDiagnostics = { diagnosticsDialog = true }
                 )
             }
         }
@@ -331,6 +334,10 @@ fun WifigramApp() {
                 settingsDialog = false
                 tuningDialog = true
             },
+            onDiagnostics = {
+                settingsDialog = false
+                diagnosticsDialog = true
+            },
             onDismiss = { settingsDialog = false }
         )
     }
@@ -338,8 +345,28 @@ fun WifigramApp() {
     if (tuningDialog) {
         TuningDialog(
             initial = ProfileStore.settings(context),
+            initialTuning = ProfileStore.tuning(context),
             onSave = { value -> ProfileStore.saveSettings(context, value) },
+            onSaveTuning = { value -> ProfileStore.saveTuning(context, value) },
             onDismiss = { tuningDialog = false }
+        )
+    }
+
+    if (diagnosticsDialog) {
+        val report by engine.voiceReport.collectAsStateWithLifecycle()
+        var journal by remember { mutableStateOf(VoiceTrace.read(context).orEmpty()) }
+        VoiceDiagnosticsDialog(
+            report = report,
+            journal = journal,
+            onRefresh = {
+                engine.requestVoiceReport()
+                journal = VoiceTrace.read(context).orEmpty()
+            },
+            onClearJournal = {
+                VoiceTrace.clear(context)
+                journal = ""
+            },
+            onDismiss = { diagnosticsDialog = false }
         )
     }
 }

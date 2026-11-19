@@ -1,6 +1,7 @@
 package app.wifigram.ui
 
 import android.content.Intent
+import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import app.wifigram.ProfileStore
 import app.wifigram.Settings
 import app.wifigram.R
 import app.wifigram.call.VoiceTrace
+import app.wifigram.call.VoiceTuning
 
 /** The name of the phone, the other phones see it in the station. */
 @Composable
@@ -149,6 +151,7 @@ fun SettingsDialog(
     language: String,
     onSaveLanguage: (String) -> Unit,
     onMore: () -> Unit = {},
+    onDiagnostics: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -265,10 +268,17 @@ fun SettingsDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onMore()
-            }) {
-                Text(stringResource(R.string.tuning_more))
+            Row {
+                TextButton(onClick = {
+                    onDiagnostics()
+                }) {
+                    Text(stringResource(R.string.diagnostics_open))
+                }
+                TextButton(onClick = {
+                    onMore()
+                }) {
+                    Text(stringResource(R.string.tuning_more))
+                }
             }
         }
     )
@@ -282,10 +292,13 @@ fun SettingsDialog(
 @Composable
 fun TuningDialog(
     initial: Settings,
+    initialTuning: VoiceTuning,
     onSave: (Settings) -> Unit,
+    onSaveTuning: (VoiceTuning) -> Unit,
     onDismiss: () -> Unit
 ) {
     var value by remember { mutableStateOf(initial) }
+    var tuning by remember { mutableStateOf(initialTuning) }
     val context = LocalContext.current
 
     AlertDialog(
@@ -327,22 +340,283 @@ fun TuningDialog(
                     checked = value.speakerDefault,
                     onChange = { value = value.copy(speakerDefault = it) }
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Text(
+                    text = stringResource(R.string.tuning_voice_engine),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = stringResource(R.string.tuning_voice_engine_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                TuningSlider(
+                    title = stringResource(R.string.tuning_sample_rate),
+                    value = tuning.sampleRate.toFloat(),
+                    range = 8000f..48000f,
+                    steps = 19,
+                    text = "${tuning.sampleRate} Hz",
+                    onChange = { tuning = tuning.copy(sampleRate = it.toInt()) }
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_bitrate),
+                    value = tuning.maxBitrate.toFloat(),
+                    range = 8f..128f,
+                    steps = 29,
+                    text = "${tuning.maxBitrate} kbps",
+                    onChange = { tuning = tuning.copy(maxBitrate = it.toInt()) }
+                )
+                TuningSlider(
+                    title = stringResource(R.string.tuning_jitter_packets),
+                    value = tuning.jitterPackets.toFloat(),
+                    range = 10f..100f,
+                    steps = 17,
+                    text = "${tuning.jitterPackets}",
+                    onChange = { tuning = tuning.copy(jitterPackets = it.toInt()) }
+                )
+
+                Text(
+                    text = stringResource(R.string.tuning_microphone_source),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TuningChip(
+                        selected = tuning.audioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                        label = stringResource(R.string.tuning_source_voice),
+                        onClick = {
+                            tuning = tuning.copy(
+                                audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                            )
+                        }
+                    )
+                    TuningChip(
+                        selected = tuning.audioSource == MediaRecorder.AudioSource.MIC,
+                        label = stringResource(R.string.tuning_source_mic),
+                        onClick = {
+                            tuning = tuning.copy(audioSource = MediaRecorder.AudioSource.MIC)
+                        }
+                    )
+                    TuningChip(
+                        selected = tuning.audioSource == MediaRecorder.AudioSource.DEFAULT,
+                        label = stringResource(R.string.tuning_source_default),
+                        onClick = {
+                            tuning = tuning.copy(audioSource = MediaRecorder.AudioSource.DEFAULT)
+                        }
+                    )
+                }
+
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_low_latency),
+                    hint = stringResource(R.string.tuning_low_latency_hint),
+                    checked = tuning.useLowLatency,
+                    onChange = { tuning = tuning.copy(useLowLatency = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_hardware_ns),
+                    hint = stringResource(R.string.tuning_hardware_ns_hint),
+                    checked = tuning.hardwareNoiseSuppress,
+                    onChange = { tuning = tuning.copy(hardwareNoiseSuppress = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_software_echo),
+                    hint = stringResource(R.string.tuning_software_echo_hint),
+                    checked = tuning.softwareEcho,
+                    onChange = { tuning = tuning.copy(softwareEcho = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_software_noise),
+                    hint = stringResource(R.string.tuning_software_noise_hint),
+                    checked = tuning.softwareNoise,
+                    onChange = { tuning = tuning.copy(softwareNoise = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_agc),
+                    hint = stringResource(R.string.tuning_agc_hint),
+                    checked = tuning.autoGain,
+                    onChange = { tuning = tuning.copy(autoGain = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_highpass),
+                    hint = stringResource(R.string.tuning_highpass_hint),
+                    checked = tuning.highpass,
+                    onChange = { tuning = tuning.copy(highpass = it) }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Text(
+                    text = stringResource(R.string.tuning_ice),
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                Text(
+                    text = stringResource(R.string.tuning_ice_transport),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TuningChip(
+                        selected = tuning.iceTransport == VoiceTuning.ICE_ALL,
+                        label = stringResource(R.string.tuning_ice_all),
+                        onClick = { tuning = tuning.copy(iceTransport = VoiceTuning.ICE_ALL) }
+                    )
+                    TuningChip(
+                        selected = tuning.iceTransport == VoiceTuning.ICE_RELAY,
+                        label = stringResource(R.string.tuning_ice_relay),
+                        onClick = { tuning = tuning.copy(iceTransport = VoiceTuning.ICE_RELAY) }
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.tuning_tcp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TuningChip(
+                        selected = tuning.tcpCandidate == VoiceTuning.TCP_ENABLED,
+                        label = stringResource(R.string.tuning_tcp_on),
+                        onClick = { tuning = tuning.copy(tcpCandidate = VoiceTuning.TCP_ENABLED) }
+                    )
+                    TuningChip(
+                        selected = tuning.tcpCandidate == VoiceTuning.TCP_DISABLED,
+                        label = stringResource(R.string.tuning_tcp_off),
+                        onClick = { tuning = tuning.copy(tcpCandidate = VoiceTuning.TCP_DISABLED) }
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.tuning_policy),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TuningChip(
+                        selected = tuning.candidatePolicy == VoiceTuning.CAND_ALL,
+                        label = stringResource(R.string.tuning_policy_all),
+                        onClick = { tuning = tuning.copy(candidatePolicy = VoiceTuning.CAND_ALL) }
+                    )
+                    TuningChip(
+                        selected = tuning.candidatePolicy == VoiceTuning.CAND_LOW_COST,
+                        label = stringResource(R.string.tuning_policy_low),
+                        onClick = {
+                            tuning = tuning.copy(candidatePolicy = VoiceTuning.CAND_LOW_COST)
+                        }
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.tuning_bundle),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TuningChip(
+                        selected = tuning.bundle == VoiceTuning.BUNDLE_MAX,
+                        label = stringResource(R.string.tuning_bundle_max),
+                        onClick = { tuning = tuning.copy(bundle = VoiceTuning.BUNDLE_MAX) }
+                    )
+                    TuningChip(
+                        selected = tuning.bundle == VoiceTuning.BUNDLE_BALANCED,
+                        label = stringResource(R.string.tuning_bundle_balanced),
+                        onClick = { tuning = tuning.copy(bundle = VoiceTuning.BUNDLE_BALANCED) }
+                    )
+                    TuningChip(
+                        selected = tuning.bundle == VoiceTuning.BUNDLE_COMPAT,
+                        label = stringResource(R.string.tuning_bundle_compat),
+                        onClick = { tuning = tuning.copy(bundle = VoiceTuning.BUNDLE_COMPAT) }
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.tuning_sdp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TuningChip(
+                        selected = tuning.sdpSemantics == VoiceTuning.SDP_UNIFIED,
+                        label = stringResource(R.string.tuning_sdp_unified),
+                        onClick = { tuning = tuning.copy(sdpSemantics = VoiceTuning.SDP_UNIFIED) }
+                    )
+                    TuningChip(
+                        selected = tuning.sdpSemantics == VoiceTuning.SDP_PLAN_B,
+                        label = stringResource(R.string.tuning_sdp_plan_b),
+                        onClick = { tuning = tuning.copy(sdpSemantics = VoiceTuning.SDP_PLAN_B) }
+                    )
+                }
+
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_gather_continually),
+                    hint = stringResource(R.string.tuning_gather_continually_hint),
+                    checked = tuning.gatherContinually,
+                    onChange = { tuning = tuning.copy(gatherContinually = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_trickle),
+                    hint = stringResource(R.string.tuning_trickle_hint),
+                    checked = tuning.trickle,
+                    onChange = { tuning = tuning.copy(trickle = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_rtcp_mux),
+                    hint = stringResource(R.string.tuning_rtcp_mux_hint),
+                    checked = tuning.rtcpMux,
+                    onChange = { tuning = tuning.copy(rtcpMux = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_fast_accelerate),
+                    hint = stringResource(R.string.tuning_fast_accelerate_hint),
+                    checked = tuning.fastAccelerate,
+                    onChange = { tuning = tuning.copy(fastAccelerate = it) }
+                )
+                TuningSwitch(
+                    title = stringResource(R.string.tuning_ice_restart),
+                    hint = stringResource(R.string.tuning_ice_restart_hint),
+                    checked = tuning.iceRestartOnFail,
+                    onChange = { tuning = tuning.copy(iceRestartOnFail = it) }
+                )
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 ProfileStore.saveSettings(context, value)
+                ProfileStore.saveTuning(context, tuning)
                 onSave(value)
+                onSaveTuning(tuning)
                 onDismiss()
             }) {
                 Text(stringResource(R.string.tuning_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text(stringResource(R.string.tuning_cancel))
+            Row {
+                TextButton(onClick = {
+                    tuning = VoiceTuning()
+                }) {
+                    Text(stringResource(R.string.tuning_reset))
+                }
+                TextButton(onClick = { onDismiss() }) {
+                    Text(stringResource(R.string.tuning_cancel))
+                }
             }
         }
+    )
+}
+
+/** A small button with the name of the choice. */
+@Composable
+private fun TuningChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        modifier = Modifier.padding(end = 8.dp)
     )
 }
 

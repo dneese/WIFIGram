@@ -31,6 +31,7 @@ class VoiceClient(
         fun onStats(rttMs: Int, jitterMs: Int, lossPercent: Int, codec: String)
         fun onError(text: String)
         fun onDead(text: String)
+        fun onReport(text: String)
     }
 
     private var service: Messenger? = null
@@ -60,6 +61,10 @@ class VoiceClient(
 
                 VoiceMessages.ERROR -> callbacks.onError(
                     data.getString(VoiceMessages.KEY_PAYLOAD).orEmpty()
+                )
+
+                VoiceMessages.DIAGNOSTICS -> callbacks.onReport(
+                    data.getString(VoiceMessages.KEY_REPORT).orEmpty()
                 )
             }
         }
@@ -119,10 +124,11 @@ class VoiceClient(
     }
 
     /** Begins a call in the voice process. */
-    fun start(callId: String, initiator: Boolean) {
+    fun start(callId: String, initiator: Boolean, tuning: VoiceTuning) {
         val data = VoiceMessages.bundleOf(
             VoiceMessages.KEY_CALL_ID to callId,
-            VoiceMessages.KEY_INITIATOR to initiator
+            VoiceMessages.KEY_INITIATOR to initiator,
+            VoiceMessages.KEY_TUNING to tuning.toJson()
         )
         if (!bound) {
             pending.clear()
@@ -165,6 +171,11 @@ class VoiceClient(
     /** Looks for the way of the ice again after the WiFi came back. */
     fun restartIce() {
         send(VoiceMessages.RESTART_ICE, null)
+    }
+
+    /** Asks the voice process for the full report of the call. */
+    fun requestReport() {
+        send(VoiceMessages.REPORT, null)
     }
 
     /** Ends the call in the voice process. */

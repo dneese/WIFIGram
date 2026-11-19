@@ -35,6 +35,7 @@ class VoiceService : Service() {
     private var client: Messenger? = null
     private var engine: WebRtcEngine? = null
     private var callId: String = ""
+    private var tuning: VoiceTuning = VoiceTuning()
 
     private val worker = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "wifigram-voice").apply { isDaemon = true }
@@ -76,6 +77,9 @@ class VoiceService : Service() {
             VoiceMessages.START -> {
                 callId = data.getString(VoiceMessages.KEY_CALL_ID).orEmpty()
                 val initiator = data.getBoolean(VoiceMessages.KEY_INITIATOR, false)
+                tuning = VoiceTuning.fromJson(
+                    data.getString(VoiceMessages.KEY_TUNING).orEmpty()
+                )
                 startEngine(initiator)
             }
 
@@ -99,13 +103,15 @@ class VoiceService : Service() {
             VoiceMessages.SPEAKER -> engine?.setSpeaker(data.getBoolean(VoiceMessages.KEY_FLAG, false))
 
             VoiceMessages.RESTART_ICE -> engine?.restartIce()
+
+            VoiceMessages.REPORT -> sendReport()
         }
     }
 
     private fun startEngine(initiator: Boolean) {
         stopEngine()
         VoiceTrace.stage(this, "engine-create")
-        val created = WebRtcEngine(this, object : WebRtcEngine.Callbacks {
+        val created = WebRtcEngine(this, tuning, object : WebRtcEngine.Callbacks {
             override fun onSignal(kind: String, payload: String) {
                 reply(
                     VoiceMessages.SIGNAL,
@@ -158,6 +164,21 @@ class VoiceService : Service() {
         created.setVolume(settings.voiceVolume)
         created.setSpeaker(settings.speakerDefault)
         created.start(initiator)
+    }
+
+    /** Sends the full report of the call to the app. */
+    private fun sendReport() {
+        val text = try {
+            val engineText = engine?.report().orEmpty()
+            val journal = VoiceTrace.read(this).orEmpty()
+            "$engineText\n--- journal ---\n$journal"
+        } catch (error: Exception) {
+            "The report could not be made: ${error.message}"
+        }
+        reply(
+            VoiceMessages.DIAGNOSTICS,
+            VoiceMessages.bundleOf(VoiceMessages.KEY_REPORT to text)
+        )
     }
 
     private fun stopEngine() {
