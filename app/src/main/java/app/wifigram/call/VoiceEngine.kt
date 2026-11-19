@@ -16,4 +16,5 @@ object VoiceEngine {
     const val REASON_SIGNAL_ERROR = "signal-error"
     const val REASON_START_FAILED = "start-failed"
     const val REASON_OLD_PEER = "peer-too-old"
+    const val REASON_MIC_PERMISSION = "mic-permission-denied"
 }

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wifigram.App
 import app.wifigram.CallLogStore
+import app.wifigram.call.VoiceReport
 import app.wifigram.call.VoiceTrace
 import app.wifigram.Intercom
 import app.wifigram.IntercomService
@@ -100,12 +101,35 @@ fun WifigramApp() {
     } ?: stringResource(R.string.phone_fallback)
 
     var pendingCall by remember { mutableStateOf<String?>(null) }
+    var pendingAnswer by remember { mutableStateOf(false) }
     val micPermission = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         val target = pendingCall
+        val answer = pendingAnswer
         pendingCall = null
-        if (granted && target != null) engine.startCall(target)
+        pendingAnswer = false
+        if (answer) {
+            engine.answerCall()
+            if (!granted) {
+                scope.launch { snackbar.showSnackbar(context.getString(R.string.call_mic_denied)) }
+            }
+        } else if (granted && target != null) {
+            engine.startCall(target)
+        }
+    }
+
+    val answerCall: () -> Unit = {
+        val allowed = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (allowed) {
+            engine.answerCall()
+        } else {
+            pendingAnswer = true
+            micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     val startCall: (String) -> Unit = { id ->
@@ -288,7 +312,7 @@ fun WifigramApp() {
             Box(modifier = Modifier.fillMaxSize()) {
                 CallScreen(
                     engine = engine,
-                    onAnswer = { engine.answerCall() },
+                    onAnswer = answerCall,
                     onReject = { engine.rejectCall() },
                     onCancel = { engine.cancelCall() },
                     onEnd = { engine.endCall() },
@@ -365,6 +389,18 @@ fun WifigramApp() {
             onClearJournal = {
                 VoiceTrace.clear(context)
                 journal = ""
+            },
+            onSaveFile = { text ->
+                val ok = VoiceReport.save(context, text)
+                scope.launch {
+                    snackbar.showSnackbar(
+                        if (ok) {
+                            context.getString(R.string.diagnostics_saved)
+                        } else {
+                            context.getString(R.string.diagnostics_save_failed)
+                        }
+                    )
+                }
             },
             onDismiss = { diagnosticsDialog = false }
         )

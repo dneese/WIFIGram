@@ -27,6 +27,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import app.wifigram.R
+import app.wifigram.call.VoiceReport
 
 /**
  * The window of the diagnosis: what the phone did with the voice, what it
@@ -41,6 +42,7 @@ fun VoiceDiagnosticsDialog(
     journal: String,
     onRefresh: () -> Unit,
     onClearJournal: () -> Unit,
+    onSaveFile: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -117,6 +119,11 @@ fun VoiceDiagnosticsDialog(
                     journalCleared = true
                 }) {
                     Text(stringResource(R.string.diagnostics_clear))
+                }
+                TextButton(onClick = {
+                    onSaveFile(report + "\n" + journal)
+                }) {
+                    Text(stringResource(R.string.diagnostics_save))
                 }
             }
         }

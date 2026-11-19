@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import app.wifigram.call.VoiceClient
 import app.wifigram.call.VoiceEngine
+import app.wifigram.call.VoiceReport
 import app.wifigram.call.VoiceTrace
 import app.wifigram.net.DirectBridge
 import app.wifigram.net.Discovery
@@ -189,6 +190,7 @@ class Intercom(
     private var running = false
     private var callStartedAt = 0L
     private var signalLostAt = 0L
+    private var voiceSilenceNoted = false
 
     init {
         // The words of the old conversations are still here after a restart.
@@ -458,6 +460,12 @@ class Intercom(
                         incomingFiles.remove(chunk.transferId)
                         val target = uniqueFile(info.file.parentFile, Protocol.clean(info.meta.name))
                         info.file.renameTo(target)
+                        ReceivedFiles.saveToDownloads(
+                            context,
+                            target,
+                            target.name,
+                            info.meta.mime.ifBlank { "application/octet-stream" }
+                        )
                         appendMessage(
                             ChatMessage(
                                 id = java.util.UUID.randomUUID().toString(),
@@ -925,6 +933,16 @@ class Intercom(
         val call = _call.value ?: return
         VoiceTrace.start(context, call.callId)
         rtcQuality = Quality()
+        voiceSilenceNoted = false
+        val micAllowed = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!micAllowed) {
+            VoiceTrace.error(context, VoiceEngine.REASON_MIC_PERMISSION)
+            failVoice(call.callId, VoiceEngine.REASON_MIC_PERMISSION)
+            return
+        }
         if (!startWebRtcVoice(call, initiator)) {
             failVoice(call.callId, VoiceEngine.REASON_START_FAILED)
         }
@@ -932,6 +950,7 @@ class Intercom(
 
     private fun startWebRtcVoice(call: Call, initiator: Boolean): Boolean {
         if (webRtcActive) return true
+        VoiceTrace.stage(context, "voice-start-request")
         val client = VoiceClient(context, object : VoiceClient.Callbacks {
             override fun onSignal(kind: String, payload: String) {
                 sendRtcSignal(call.callId, kind, payload)
@@ -997,6 +1016,7 @@ class Intercom(
         voiceClient = null
         VoiceTrace.error(context, "$reason $detail")
         val step = VoiceTrace.lastStep(context)
+        saveReportToDisk(reason)
         rtcQuality = rtcQuality.copy(
             engine = VoiceEngine.NAME,
             diagnostic = if (step.isBlank()) reason else "$reason ($step)"
@@ -1011,6 +1031,19 @@ class Intercom(
     /** Asks the voice process for the full report of the call. */
     fun requestVoiceReport() {
         try { voiceClient?.requestReport() } catch (_: Exception) { }
+    }
+
+    /** Puts the report and the journal into the common folder of the phone. */
+    private fun saveReportToDisk(reason: String) {
+        try {
+            val report = _voiceReport.value
+            val journal = VoiceTrace.read(context).orEmpty()
+            VoiceReport.save(
+                context,
+                "reason: $reason\n--- report ---\n$report\n--- journal ---\n$journal"
+            )
+        } catch (_: Exception) {
+        }
     }
 
     /** Sends the offer, the answer or the candidate to the other phone. */
@@ -1068,6 +1101,14 @@ class Intercom(
             while (true) {
                 delay(1000)
                 val call = _call.value ?: continue
+                if (call.phase == Phase.ACTIVE && webRtcActive && !voiceSilenceNoted &&
+                    _voiceReport.value.isBlank() &&
+                    System.currentTimeMillis() - callStartedAt > 15000
+                ) {
+                    voiceSilenceNoted = true
+                    VoiceTrace.stage(context, "voice-silent-15s")
+                    saveReportToDisk("voice-silent")
+                }
                 if (call.phase != Phase.ACTIVE || !call.signalLost) continue
                 if (signalLostAt == 0L) continue
                 if (System.currentTimeMillis() - signalLostAt > SIGNAL_TIMEOUT) {

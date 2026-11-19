@@ -181,4 +181,8 @@
     <string name="diagnostics_copy_journal">Copy the journal</string>
     <string name="diagnostics_share">Share</string>
     <string name="diagnostics_clear">Clear</string>
+    <string name="diagnostics_save">Save the file</string>
+    <string name="diagnostics_saved">The file is saved in Downloads</string>
+    <string name="diagnostics_save_failed">The file could not be saved</string>
+    <string name="call_mic_denied">There is no permission for the microphone — the voice will not work</string>
 </resources>

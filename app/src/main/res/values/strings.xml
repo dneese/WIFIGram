@@ -184,4 +184,8 @@
     <string name="diagnostics_copy_journal">Копіювати журнал</string>
     <string name="diagnostics_share">Поділитися</string>
     <string name="diagnostics_clear">Очистити</string>
+    <string name="diagnostics_save">Зберегти файл</string>
+    <string name="diagnostics_saved">Файл збережено в Завантаження</string>
+    <string name="diagnostics_save_failed">Не вдалося зберегти файл</string>
+    <string name="call_mic_denied">Немає дозволу на мікрофон — голос не працюватиме</string>
 </resources>

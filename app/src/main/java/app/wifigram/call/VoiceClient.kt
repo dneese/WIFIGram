@@ -39,6 +39,10 @@ class VoiceClient(
     private var connecting = false
     private var pending: MutableList<Pair<Int, Bundle?>> = mutableListOf()
 
+    init {
+        VoiceTrace.stage(context, "client-created")
+    }
+
     private val handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(message: Message) {
             val data = message.data ?: Bundle()
@@ -72,6 +76,7 @@ class VoiceClient(
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            VoiceTrace.stage(context, "client-connected")
             val messenger = Messenger(binder)
             service = messenger
             bound = true
@@ -82,6 +87,7 @@ class VoiceClient(
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            VoiceTrace.stage(context, "client-disconnected")
             service = null
             bound = false
             connecting = false
@@ -89,6 +95,7 @@ class VoiceClient(
         }
 
         override fun onBindingDied(name: ComponentName?) {
+            VoiceTrace.stage(context, "client-binding-died")
             service = null
             bound = false
             connecting = false
@@ -96,6 +103,7 @@ class VoiceClient(
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            VoiceTrace.stage(context, "client-null-binding")
             service = null
             bound = false
             connecting = false
@@ -108,11 +116,14 @@ class VoiceClient(
         if (bound || connecting) return
         connecting = true
         try {
+            VoiceTrace.stage(context, "client-connect")
             val intent = Intent(context, VoiceService::class.java)
             intent.action = VoiceService.ACTION_START
             intent.putExtra(VoiceService.EXTRA_CLIENT, Messenger(handler))
             ContextCompat.startForegroundService(context, intent)
+            VoiceTrace.stage(context, "client-service-started")
             val ok = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            VoiceTrace.stage(context, "client-bind-result=$ok")
             if (!ok) {
                 connecting = false
                 callbacks.onDead("The voice process did not open")
@@ -125,6 +136,7 @@ class VoiceClient(
 
     /** Begins a call in the voice process. */
     fun start(callId: String, initiator: Boolean, tuning: VoiceTuning) {
+        VoiceTrace.stage(context, "client-start-request")
         val data = VoiceMessages.bundleOf(
             VoiceMessages.KEY_CALL_ID to callId,
             VoiceMessages.KEY_INITIATOR to initiator,
@@ -209,7 +221,10 @@ class VoiceClient(
         val messenger = service ?: return
         try {
             messenger.send(VoiceMessages.message(what, data))
-        } catch (_: Exception) {
+            VoiceTrace.stage(context, "client-sent-$what")
+        } catch (error: Exception) {
+            VoiceTrace.error(context, "client-send-failed $what ${error.message}")
+            callbacks.onDead(error.message ?: "The voice process did not answer")
         }
     }
 }

@@ -50,15 +50,29 @@ class VoiceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        VoiceTrace.stage(this, "service-create")
         createChannel()
-        startForeground(NOTIFICATION_ID, notification())
+        VoiceTrace.stage(this, "service-notification")
+        val micAllowed = androidx.core.content.ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        VoiceTrace.stage(this, "service-mic-allowed=$micAllowed")
+        if (micAllowed) {
+            startForeground(NOTIFICATION_ID, notification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification())
+        }
+        VoiceTrace.stage(this, "service-foreground")
         installCrashHandler()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun onBind(intent: Intent?): IBinder? {
+        VoiceTrace.stage(this, "service-bind")
         client = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_CLIENT, Messenger::class.java) }
+        VoiceTrace.stage(this, "service-bound client=${client != null}")
         return Messenger(handler).binder
     }
 
@@ -73,6 +87,7 @@ class VoiceService : Service() {
     }
 
     private fun handleCommand(what: Int, data: Bundle) {
+        VoiceTrace.stage(this, "command-$what")
         when (what) {
             VoiceMessages.START -> {
                 callId = data.getString(VoiceMessages.KEY_CALL_ID).orEmpty()
