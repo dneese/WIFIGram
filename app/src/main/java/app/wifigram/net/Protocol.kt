@@ -6,6 +6,7 @@ import java.io.DataOutputStream
 import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
+import app.wifigram.call.VoiceEngine
 
 /**
  * The writer of the frames of one connection.
@@ -44,18 +45,15 @@ object Protocol {
     const val DISCOVERY_PORT = 45311
     const val TCP_PORT = 45312
 
-    /** The second connection that carries only the voice of a call. */
-    const val TCP_AUDIO_PORT = 45313
-
     const val TYPE_HELLO = 1
     const val TYPE_BYE = 2
     const val TYPE_MESSAGE = 3
     const val TYPE_FILE_META = 4
     const val TYPE_FILE_CHUNK = 5
     const val TYPE_CALL = 6
-    const val TYPE_AUDIO = 7
     const val TYPE_PING = 8
     const val TYPE_PONG = 9
+    const val TYPE_RTC = 11
 
     /** The answer that a chat message has come. */
     const val TYPE_MESSAGE_ACK = 10
@@ -65,6 +63,18 @@ object Protocol {
 
     const val BEACON_TAG = "WIFIGRAM1"
     const val MULTICAST_GROUP = "239.50.40.0"
+
+    /** The revision of the protocol that this build speaks. */
+    const val VERSION = 2
+
+    /** The new voice of the call: WebRTC over the local network. */
+    const val CAP_WEBRTC = VoiceEngine.CAPABILITY
+
+    /** The mark that says: this phone speaks the revision of the protocol. */
+    const val CAP_PROTOCOL_V2 = "v2"
+
+    /** The mark that says: this phone can carry a call. */
+    const val CAP_CALL = "call"
 
     data class Frame(val type: Int, val payload: ByteArray)
 
@@ -204,6 +214,49 @@ object Protocol {
         }
     }
 
+    // ── the WebRTC signaling ──
+
+    const val RTC_OFFER = "offer"
+    const val RTC_ANSWER = "answer"
+    const val RTC_CANDIDATE = "candidate"
+
+    data class RtcSignal(
+        val kind: String,
+        val callId: String,
+        val version: Int,
+        val payload: String
+    )
+
+    fun encodeRtcSignal(signal: RtcSignal): ByteArray =
+        bytes(
+            "${clean(signal.kind)}|${clean(signal.callId)}|${signal.version}|" +
+                opaque(signal.payload)
+        )
+
+    fun decodeRtcSignal(payload: ByteArray): RtcSignal? {
+        val parts = text(payload).split("|", limit = 4)
+        if (parts.size != 4) return null
+        val kind = parts[0]
+        if (kind != RTC_OFFER && kind != RTC_ANSWER && kind != RTC_CANDIDATE) return null
+        val callId = parts[1]
+        if (callId.isBlank()) return null
+        val version = parts[2].toIntOrNull() ?: return null
+        if (version != VERSION) return null
+        val body = plain(parts[3]) ?: return null
+        return RtcSignal(kind, callId, version, body)
+    }
+
+
+    private fun opaque(value: String): String =
+        java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(value.toByteArray(Charsets.UTF_8))
+
+    private fun plain(value: String): String? = try {
+        String(java.util.Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
     // ── the calls ──
 
     const val CALL_INVITE = "INVITE"
@@ -238,125 +291,35 @@ object Protocol {
 
     // ── the greeting ──
 
-    /** The hello says who is calling: [peer id][name]. */
-    fun encodeHello(peerId: String, name: String): ByteArray =
-        bytes("${clean(peerId)}|${clean(name)}")
+    /** The hello says who is calling and what the phone can do. */
+    fun encodeHello(peerId: String, name: String, capabilities: String): ByteArray =
+        bytes("${clean(peerId)}|${clean(name)}|$VERSION|${clean(capabilities)}")
 
     data class Hello(
         val peerId: String,
-        val name: String
+        val name: String,
+        val version: Int,
+        val capabilities: String
     )
 
     fun decodeHello(payload: ByteArray): Hello? {
-        val parts = text(payload).split("|", limit = 2)
+        val parts = text(payload).split("|", limit = 4)
         if (parts.size < 2) return null
-        return Hello(parts[0], parts[1])
+        return Hello(
+            peerId = parts[0],
+            name = parts[1],
+            version = parts.getOrNull(2)?.toIntOrNull() ?: 0,
+            capabilities = parts.getOrNull(3).orEmpty()
+        )
     }
 
-    // ── the voice ──
+    /** The marks of what a phone can do, one word each. */
+    fun encodeCapabilities(vararg marks: String): String =
+        marks.joinToString(" ") { clean(it) }
 
-    const val AUDIO_DIRECT = 1
-    const val AUDIO_RELAY = 2
-
-    /** The samples of the frame are Opus, not plain PCM. */
-    const val AUDIO_OPUS = 4
-
-    /**
-     * The piece of the voice.
-     *
-     * [flags(1)][hops(1)][sender id][call id][members][sequence(4)][samples].
-     * The sender id names the phone that spoke, so a copy that comes the
-     * long way around can be thrown away. The members are the phones of the
-     * conversation, so a phone that is only a relay knows that the sound is
-     * not for it and passes it further.
-     */
-    fun encodeAudio(
-        callId: String,
-        senderId: String,
-        members: List<String>,
-        sequence: Int,
-        data: ByteArray,
-        direct: Boolean,
-        opus: Boolean,
-        hops: Int = 3
-    ): ByteArray {
-        val id = bytes(callId)
-        val sender = bytes(senderId)
-        val out = java.io.ByteArrayOutputStream()
-        val stream = DataOutputStream(out)
-        var flags = if (direct) AUDIO_DIRECT else AUDIO_RELAY
-        if (opus) flags = flags or AUDIO_OPUS
-        stream.writeByte(flags)
-        stream.writeByte(hops)
-        stream.writeByte(sender.size)
-        stream.write(sender)
-        stream.writeByte(id.size)
-        stream.write(id)
-        stream.writeByte(members.size)
-        for (member in members) {
-            val value = bytes(member)
-            stream.writeByte(value.size)
-            stream.write(value)
-        }
-        stream.writeInt(sequence)
-        stream.write(data)
-        stream.flush()
-        return out.toByteArray()
-    }
-
-    data class Audio(
-        val callId: String,
-        val senderId: String,
-        val members: List<String>,
-        val sequence: Int,
-        val data: ByteArray,
-        val direct: Boolean,
-        val opus: Boolean,
-        val hops: Int
-    )
-
-    fun decodeAudio(payload: ByteArray): Audio? {
-        return try {
-            if (payload.size < 6) return null
-            val flags = payload[0].toInt() and 0xFF
-            val hops = payload[1].toInt() and 0xFF
-            var offset = 2
-            fun takeString(): String? {
-                if (payload.size <= offset) return null
-                val length = payload[offset].toInt() and 0xFF
-                offset++
-                if (length <= 0 || payload.size < offset + length) return null
-                val value = String(payload, offset, length, Charsets.UTF_8)
-                offset += length
-                return value
-            }
-            val senderId = takeString() ?: return null
-            val callId = takeString() ?: return null
-            if (payload.size <= offset) return null
-            val memberCount = payload[offset].toInt() and 0xFF
-            offset++
-            val members = mutableListOf<String>()
-            repeat(memberCount) {
-                members.add(takeString() ?: return null)
-            }
-            if (payload.size < offset + 4) return null
-            val sequence = ((payload[offset].toInt() and 0xFF) shl 24) or
-                ((payload[offset + 1].toInt() and 0xFF) shl 16) or
-                ((payload[offset + 2].toInt() and 0xFF) shl 8) or
-                (payload[offset + 3].toInt() and 0xFF)
-            offset += 4
-            Audio(
-                callId = callId,
-                senderId = senderId,
-                members = members,
-                sequence = sequence,
-                data = payload.copyOfRange(offset, payload.size),
-                direct = (flags and AUDIO_DIRECT) != 0,
-                opus = (flags and AUDIO_OPUS) != 0,
-                hops = hops
-            )
-        } catch (_: Exception) {
-            null
-        }
-    }
+    fun decodeCapabilities(value: String): Set<String> =
+        value.split(' ', '\t', '\n')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
 }

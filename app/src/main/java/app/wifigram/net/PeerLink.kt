@@ -24,6 +24,7 @@ class PeerLink(
     private val socket: Socket,
     private val localPeerId: String,
     private val localName: String,
+    private val localCapabilities: String,
     remotePeerId: String,
     private val scope: CoroutineScope,
     private val onEvent: (PeerLink, Event) -> Unit
@@ -36,7 +37,7 @@ class PeerLink(
         data class FileMeta(val meta: Protocol.FileMeta) : Event()
         data class FileChunk(val chunk: Protocol.FileChunk) : Event()
         data class Call(val signal: Protocol.CallSignal) : Event()
-        data class Audio(val audio: Protocol.Audio) : Event()
+        data class Rtc(val signal: Protocol.RtcSignal) : Event()
         object Closed : Event()
     }
 
@@ -57,6 +58,14 @@ class PeerLink(
 
     @Volatile
     var remoteName: String = ""
+
+    /** What the other phone can do, in the words of the protocol. */
+    @Volatile
+    var remoteCapabilities: String = ""
+
+    /** The revision of the protocol that the other phone speaks. */
+    @Volatile
+    var remoteVersion: Int = 0
 
     /** How long the way to the other phone takes, in milliseconds. */
     @Volatile
@@ -104,7 +113,7 @@ class PeerLink(
     }
 
     private fun handshake(initiator: Boolean) {
-        val hello = Protocol.encodeHello(localPeerId, localName)
+        val hello = Protocol.encodeHello(localPeerId, localName, localCapabilities)
         if (initiator) {
             writer.write(Protocol.TYPE_HELLO, hello)
             val frame = Protocol.readFrame(input) ?: throw IllegalStateException("no hello")
@@ -112,12 +121,16 @@ class PeerLink(
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
             remotePeerId = remote.peerId
             remoteName = remote.name
+            remoteVersion = remote.version
+            remoteCapabilities = remote.capabilities
         } else {
             val frame = Protocol.readFrame(input) ?: throw IllegalStateException("no hello")
             if (frame.type != Protocol.TYPE_HELLO) throw IllegalStateException("wrong hello")
             val remote = Protocol.decodeHello(frame.payload) ?: throw IllegalStateException("bad hello")
             remotePeerId = remote.peerId
             remoteName = remote.name
+            remoteVersion = remote.version
+            remoteCapabilities = remote.capabilities
             writer.write(Protocol.TYPE_HELLO, hello)
         }
         onEvent(this@PeerLink, Event.Hello(remotePeerId, remoteName))
@@ -163,9 +176,9 @@ class PeerLink(
                     val signal = Protocol.decodeCall(frame.payload)
                     if (signal != null) onEvent(this@PeerLink, Event.Call(signal))
                 }
-                Protocol.TYPE_AUDIO -> {
-                    val audio = Protocol.decodeAudio(frame.payload)
-                    if (audio != null) onEvent(this@PeerLink, Event.Audio(audio))
+                Protocol.TYPE_RTC -> {
+                    val signal = Protocol.decodeRtcSignal(frame.payload)
+                    if (signal != null) onEvent(this@PeerLink, Event.Rtc(signal))
                 }
                 Protocol.TYPE_BYE -> break
             }

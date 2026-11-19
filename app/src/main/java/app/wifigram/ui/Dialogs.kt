@@ -2,7 +2,6 @@ package app.wifigram.ui
 
 import android.content.Intent
 import android.media.audiofx.AcousticEchoCanceler
-import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -141,21 +140,17 @@ fun ModeDialog(
 }
 
 /**
- * The settings of the phone: the noise catcher of the microphone and the
- * story of the app with the link to its source.
+ * The settings of the phone: the language and the story of the app with the
+ * link to its source.
  */
 @Composable
 fun SettingsDialog(
-    denoise: Boolean,
-    onSaveDenoise: (Boolean) -> Unit,
     language: String,
     onSaveLanguage: (String) -> Unit,
     onMore: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    var isDenoise by remember { mutableStateOf(denoise) }
     val context = LocalContext.current
-    val noiseReady = remember { NoiseSuppressor.isAvailable() }
     val echoReady = remember { AcousticEchoCanceler.isAvailable() }
     val version = remember {
         try {
@@ -181,50 +176,18 @@ fun SettingsDialog(
                 ) {
                     FilterChip(
                         selected = language == Locales.UKRAINIAN,
-                        onClick = {
-                            onSaveDenoise(isDenoise)
-                            onSaveLanguage(Locales.UKRAINIAN)
-                        },
+                        onClick = { onSaveLanguage(Locales.UKRAINIAN) },
                         label = { Text(stringResource(R.string.language_uk)) },
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     FilterChip(
                         selected = language == Locales.ENGLISH,
-                        onClick = {
-                            onSaveDenoise(isDenoise)
-                            onSaveLanguage(Locales.ENGLISH)
-                        },
+                        onClick = { onSaveLanguage(Locales.ENGLISH) },
                         label = { Text(stringResource(R.string.language_en)) }
                     )
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_noise))
-                        Text(
-                            text = stringResource(R.string.settings_noise_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (!noiseReady) {
-                            Text(
-                                text = stringResource(R.string.settings_unavailable),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = isDenoise,
-                        onCheckedChange = { isDenoise = it },
-                        enabled = noiseReady
-                    )
-                }
 
                 Text(
                     text = if (echoReady) {
@@ -233,8 +196,7 @@ fun SettingsDialog(
                         stringResource(R.string.settings_echo_none)
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -273,7 +235,6 @@ fun SettingsDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                onSaveDenoise(isDenoise)
                 onDismiss()
             }) {
                 Text(stringResource(R.string.ready))
@@ -281,7 +242,6 @@ fun SettingsDialog(
         },
         dismissButton = {
             TextButton(onClick = {
-                onSaveDenoise(isDenoise)
                 onMore()
             }) {
                 Text(stringResource(R.string.tuning_more))
@@ -303,8 +263,6 @@ fun TuningDialog(
 ) {
     var value by remember { mutableStateOf(initial) }
     val context = LocalContext.current
-    val echoReady = remember { AcousticEchoCanceler.isAvailable() }
-    val noiseReady = remember { NoiseSuppressor.isAvailable() }
 
     AlertDialog(
         onDismissRequest = { onDismiss() },
@@ -317,32 +275,6 @@ fun TuningDialog(
                 Text(
                     text = stringResource(R.string.tuning_voice),
                     style = MaterialTheme.typography.titleSmall
-                )
-                TuningSwitch(
-                    title = stringResource(R.string.tuning_echo),
-                    hint = stringResource(R.string.tuning_echo_hint),
-                    checked = value.echoCancel,
-                    enabled = echoReady,
-                    onChange = { value = value.copy(echoCancel = it) }
-                )
-                TuningSwitch(
-                    title = stringResource(R.string.tuning_noise),
-                    hint = stringResource(R.string.tuning_noise_hint),
-                    checked = value.noiseSuppress,
-                    enabled = noiseReady,
-                    onChange = { value = value.copy(noiseSuppress = it) }
-                )
-                TuningSwitch(
-                    title = stringResource(R.string.tuning_gain),
-                    hint = stringResource(R.string.tuning_gain_hint),
-                    checked = value.autoGain,
-                    onChange = { value = value.copy(autoGain = it) }
-                )
-                TuningSwitch(
-                    title = stringResource(R.string.tuning_opus),
-                    hint = stringResource(R.string.tuning_opus_hint),
-                    checked = value.opus,
-                    onChange = { value = value.copy(opus = it) }
                 )
                 TuningSlider(
                     title = stringResource(R.string.tuning_volume),
@@ -370,68 +302,6 @@ fun TuningDialog(
                     hint = stringResource(R.string.tuning_speaker_hint),
                     checked = value.speakerDefault,
                     onChange = { value = value.copy(speakerDefault = it) }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                Text(
-                    text = stringResource(R.string.tuning_connection),
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    text = stringResource(R.string.tuning_transport),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = value.transport == Settings.TRANSPORT_AUTO,
-                        onClick = { value = value.copy(transport = Settings.TRANSPORT_AUTO) },
-                        label = { Text(stringResource(R.string.tuning_transport_auto)) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    FilterChip(
-                        selected = value.transport == Settings.TRANSPORT_UDP,
-                        onClick = { value = value.copy(transport = Settings.TRANSPORT_UDP) },
-                        label = { Text(stringResource(R.string.tuning_transport_udp)) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    FilterChip(
-                        selected = value.transport == Settings.TRANSPORT_TCP,
-                        onClick = { value = value.copy(transport = Settings.TRANSPORT_TCP) },
-                        label = { Text(stringResource(R.string.tuning_transport_tcp)) }
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.tuning_transport_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TuningSlider(
-                    title = stringResource(R.string.tuning_jitter),
-                    value = value.jitterMs.toFloat(),
-                    range = Settings.MIN_JITTER_MS.toFloat()..Settings.MAX_JITTER_MS.toFloat(),
-                    steps = 18,
-                    text = "${value.jitterMs} ms",
-                    onChange = { value = value.copy(jitterMs = it.toInt()) }
-                )
-                TuningSlider(
-                    title = stringResource(R.string.tuning_hello),
-                    value = value.helloIntervalMs.toFloat(),
-                    range = Settings.MIN_HELLO_MS.toFloat()..Settings.MAX_HELLO_MS.toFloat(),
-                    steps = 17,
-                    text = "${value.helloIntervalMs} ms",
-                    onChange = { value = value.copy(helloIntervalMs = it.toInt()) }
-                )
-                TuningSlider(
-                    title = stringResource(R.string.tuning_ack),
-                    value = value.ackIntervalMs.toFloat(),
-                    range = Settings.MIN_ACK_MS.toFloat()..Settings.MAX_ACK_MS.toFloat(),
-                    steps = 18,
-                    text = "${value.ackIntervalMs} ms",
-                    onChange = { value = value.copy(ackIntervalMs = it.toInt()) }
                 )
             }
         },

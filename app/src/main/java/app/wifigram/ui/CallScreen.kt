@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
@@ -27,7 +25,6 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,11 +60,9 @@ fun CallScreen(
     onCancel: () -> Unit,
     onEnd: () -> Unit,
     onToggleMute: () -> Unit,
-    onToggleSpeaker: () -> Unit,
-    onAdd: (String) -> Unit
+    onToggleSpeaker: () -> Unit
 ) {
     val call by engine.call.collectAsStateWithLifecycle()
-    val waiting by engine.waiting.collectAsStateWithLifecycle()
     val current = call ?: return
 
     var seconds by remember { mutableIntStateOf(0) }
@@ -144,52 +139,7 @@ fun CallScreen(
                 )
             }
 
-            if (current.phase == Intercom.Phase.ACTIVE && current.participants.size > 1) {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(
-                    text = stringResource(
-                        R.string.call_in_conversation,
-                        current.participants.joinToString(", ") { it.name }
-                    ),
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-
             Spacer(modifier = Modifier.weight(1f))
-
-            if (waiting.isNotEmpty() && current.phase == Intercom.Phase.ACTIVE) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.call_waiting_list),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    waiting.forEach { participant ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = participant.name,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(onClick = { onAdd(participant.id) }) {
-                                Text(stringResource(R.string.call_add))
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
 
             when (current.phase) {
                 Intercom.Phase.INCOMING -> {
@@ -264,28 +214,46 @@ fun CallScreen(
  */
 @Composable
 private fun QualityRow(quality: Intercom.Quality) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        SignalBars(
-            bars = quality.bars,
-            color = when (quality.bars) {
-                4, 3 -> CallGreen
-                2 -> MaterialTheme.colorScheme.tertiary
-                else -> CallRed
-            }
-        )
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            SignalBars(
+                bars = quality.bars,
+                color = when (quality.bars) {
+                    4, 3 -> CallGreen
+                    2 -> MaterialTheme.colorScheme.tertiary
+                    else -> CallRed
+                }
+            )
+            Text(
+                text = stringResource(
+                    R.string.call_quality_details,
+                    quality.rttMs.coerceAtLeast(0),
+                    quality.jitterMs,
+                    quality.lossPercent
+                ),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Text(
             text = stringResource(
-                R.string.call_quality_details,
-                quality.rttMs.coerceAtLeast(0),
-                quality.jitterMs,
-                quality.lossPercent
+                R.string.call_quality_engine,
+                quality.engine,
+                quality.codec.ifBlank { stringResource(R.string.call_quality_codec_none) }
             ),
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (quality.diagnostic.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.call_voice_diagnostic, quality.diagnostic),
+                fontSize = 12.sp,
+                color = CallRed
+            )
+        }
     }
 }
 

@@ -27,9 +27,6 @@
     <string name="call_caller">Хто дзвонить</string>
     <string name="call_waiting_line">Ви чекаєте на лінії</string>
     <string name="call_no_signal">Немає зв\'язку, очікуємо…</string>
-    <string name="call_in_conversation">У розмові: %1$s</string>
-    <string name="call_waiting_list">Чекають на лінії:</string>
-    <string name="call_add">Додати</string>
     <string name="call_microphone">Мікрофон</string>
     <string name="call_speaker">Динамік</string>
     <string name="call_earpiece">Вухо</string>
@@ -89,9 +86,6 @@
     <string name="mode_hint">На одному телефоні натисніть «Створити», на іншому «Приєднатися».</string>
     <string name="settings_title">Налаштування</string>
     <string name="settings_language">Мова програми</string>
-    <string name="settings_noise">Шумопоглинання</string>
-    <string name="settings_noise_hint">Гул, вентиляція і двигун стають тихішими</string>
-    <string name="settings_unavailable">На цьому телефоні недоступне</string>
     <string name="settings_echo_ok">Ехо від динаміка прибирається саме, поки телефон у спікерфоні.</string>
     <string name="settings_echo_none">Ехо від динаміка на цьому телефоні прибирати нечем.</string>
     <string name="about_title">О програмі</string>
@@ -111,34 +105,21 @@
 
     <color name="ic_launcher_background">#1A73E8</color>
 
-    <string name="call_quality">Якість зв\'язку</string>
     <string name="call_quality_details">%1$d мс · тремтіння %2$d мс · втрата %3$d%%</string>
     <string name="tuning_title">Налаштування голосу та зв\'язку</string>
     <string name="tuning_voice">Голос</string>
-    <string name="tuning_echo">Відміна ехо</string>
-    <string name="tuning_echo_hint">Телефон прибирає голос динаміка з мікрофона</string>
-    <string name="tuning_noise">Прибирання шуму</string>
-    <string name="tuning_noise_hint">Гул вентиляторів і машин стає тихішим</string>
-    <string name="tuning_gain">Автоматичний рівень гучності</string>
-    <string name="tuning_gain_hint">Телефон сам тримає голос на одній гучності</string>
-    <string name="tuning_opus">Opus-кодек</string>
-    <string name="tuning_opus_hint">Менше даних у мережі, звук без спотворень</string>
     <string name="tuning_volume">Гучність голосу</string>
     <string name="tuning_sound">Звук</string>
     <string name="tuning_ring">Звук вхідного дзвінка</string>
     <string name="tuning_ring_hint">Телефон подає знак, коли хтось дзвонить</string>
     <string name="tuning_speaker">Спершу через динамік</string>
     <string name="tuning_speaker_hint">Розмова починається з динаміка, а не з вуха</string>
-    <string name="tuning_connection">Зв\'язок</string>
-    <string name="tuning_transport">Шлях голосу</string>
-    <string name="tuning_transport_auto">Авто</string>
-    <string name="tuning_transport_udp">UDP</string>
-    <string name="tuning_transport_tcp">TCP</string>
-    <string name="tuning_transport_hint">UDP швидший, TCP надійніший на слабкому WiFi</string>
-    <string name="tuning_jitter">Буфер зглажування</string>
-    <string name="tuning_hello">Перевірка зв\'язку</string>
-    <string name="tuning_ack">Підтвердження голоса</string>
     <string name="tuning_save">Зберегти</string>
     <string name="tuning_cancel">Скасувати</string>
     <string name="tuning_more">Дрібні налаштування</string>
+    <string name="call_quality_engine">Двигун: %1$s · Кодек: %2$s</string>
+    <string name="call_quality_codec_none">невідомо</string>
+    <string name="call_voice_diagnostic">Діагностика: %1$s</string>
+    <string name="voice_channel">Голос дзвінка</string>
+    <string name="voice_notification">Дзвінок триває</string>
 </resources>

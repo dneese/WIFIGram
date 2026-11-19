@@ -291,8 +291,7 @@ fun WifigramApp() {
                     onCancel = { engine.cancelCall() },
                     onEnd = { engine.endCall() },
                     onToggleMute = { engine.toggleMute() },
-                    onToggleSpeaker = { engine.toggleSpeaker() },
-                    onAdd = { id -> engine.addParticipant(id) }
+                    onToggleSpeaker = { engine.toggleSpeaker() }
                 )
             }
         }
@@ -323,8 +322,6 @@ fun WifigramApp() {
 
     if (settingsDialog) {
         SettingsDialog(
-            denoise = ProfileStore.denoise(context),
-            onSaveDenoise = { value -> ProfileStore.saveDenoise(context, value) },
             language = ProfileStore.language(context),
             onSaveLanguage = { value ->
                 ProfileStore.saveLanguage(context, value)

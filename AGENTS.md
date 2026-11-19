@@ -9,7 +9,7 @@ WIFIGramm — Android застосунок-інтерком між телефо�
 Як це працює:
 
 - `./gradlew` на цій машині — не запускати. Навіть `testDebugUnitTest` занадто важкий.
-- Нативний код (Opus, Speex) потребує NDK, якого тут немає — його качати не треба, CI зробить це сам.
+- Нативного коду в застосунку більше немає: голос іде через готовий AAR WebRTC, NDK не потрібен.
 - Тести, lint і збірка живуть у CI: `.github/workflows/android-build.yml` на кожен push у `main` (`Test & Lint`, `Build Debug`, `Build Release`).
 - Реліз — тег `v*.*.*`: `bash scripts/release.sh v0.4.0` → `.github/workflows/release.yml` збирає підписані APK і створює GitHub Release.
 
@@ -21,18 +21,19 @@ gh run watch <run-id> --exit-status
 gh run view <run-id> --log-failed
 ```
 
-## Нативні бібліотеки
+## Голос: WebRTC
 
-- `app/src/main/cpp/opus` — Opus 1.5.2 (вендорено, читає `Makefile.am`, `configure.ac`, `package_version`).
-- Збирається статично в `wifigram-opus` через `app/src/main/cpp/CMakeLists.txt`.
-- SpeexDSP прибрано у v0.4.1: його шумопоглиначав голос разом із гуком. Тепер шум і ехо прибирає сам телефон (`call/VoiceEffects.kt`).
+- Голос дзвінка іде тільки через WebRTC: `io.getstream:stream-webrtc-android` (версія в `gradle/libs.versions.toml`, alias `webrtc-android`). Старого шляху з UDP-аудіо й вендореним Opus більше немає — код `app/src/main/cpp/**` видалено у v0.9.0.
+- Дзвінок лише 1:1. Старі протоколи не підтримуються: телефон надсилає в hello capability-марки `v2` (`Protocol.CAP_PROTOCOL_V2`), `rtc2` (`Protocol.CAP_WEBRTC`), `call` (`Protocol.CAP_CALL`); телефон без цих марок отримує відмову з причиною `VoiceEngine.REASON_OLD_PEER`.
+- Розмова — це offer/answer/candidate, які йдуть звичайним TCP-протоколом (`Protocol.TYPE_RTC`, `Protocol.RtcSignal`, версія 2).
+- Рушій живе у окремому процесі `:voice` (`call/VoiceService.kt`), двері до нього — `call/VoiceClient.kt`. Нативна частина WebRTC падає в процесі, застосунок лишається живим.
+- Кожен крок початку дзвінка пишеться в журнал `filesDir/voice_trace.txt` (`call/VoiceTrace.kt`). Останній рядок журналу показує в UI разом із причиною збою.
 
 ## Код
 
 - Kotlin. Сторонні бібліотеки: Compose, AndroidX і libwebrtc (`io.github.webrtc-sdk:android`) для дзвінків. Коментарі в коді — англійською, рядки для користувача — українською.
 - Налаштування — у `ProfileStore` (SharedPreferences). Мова програми — теж там (`Locales`).
-- Голос дзвінка іде через `call/CallSession.kt`: мікрофон 16 кГц, Opus, буфер згладжування, AEC/NS/AGC з `call/VoiceEffects.kt`.
-- Налаштування голосу, звуку і зв'язку — `Settings.kt` + `ProfileStore.settings()`, UI — `ui/Dialogs.kt` (`TuningDialog`).
-- WebRTC (`io.github.webrtc-sdk`) був доданий у v0.7.0 і прибирав застосунок під час підняття слухавки — причина падіння не встановлена. Код і залежність прибрані у v0.8.0. Не вмикати WebRTC знову без журналу падіння (`CrashLog` показує помилку в застосунку).
+- Налаштування — `Settings.kt` (гучність голосу, дзвінок при входячому, динамік за замовчуванням) + `ProfileStore.settings()`, UI — `ui/Dialogs.kt` (`TuningDialog`).
+- Екран дзвінка — `ui/CallScreen.kt`: показує двигун, кодек, rtt/jitter/loss і діагностику (`Intercom.Quality`).
 - Рядки — у `res/values/strings.xml` (укр) і `res/values-en/strings.xml` (англ); неhardcode-ити текст у Kotlin.
 - Release-збірка ввімкнена з R8 (`isMinifyEnabled`), тому JNI-класи треба тримати в `app/proguard-rules.pro`.
