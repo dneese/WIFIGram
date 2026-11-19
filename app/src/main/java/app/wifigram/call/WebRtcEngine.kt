@@ -595,12 +595,15 @@ class WebRtcEngine(
         } catch (_: Exception) {
             false
         }
-        val device = try {
-            audioManager.activeRecordingInfo?.deviceName ?: "?"
+        val devices = try {
+            audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                .joinToString(", ") { device ->
+                    "${device.productName}/${device.type}"
+                }
         } catch (_: Exception) {
-            "?"
+            ""
         }
-        return "hwAecAvailable=$hardwareAec hwNsAvailable=$hardwareNs input=$device"
+        return "hwAecAvailable=$hardwareAec hwNsAvailable=$hardwareNs inputs=$devices"
     }
 
     private fun now(): String = try {
